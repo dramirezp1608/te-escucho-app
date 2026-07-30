@@ -1,0 +1,16 @@
+{
+  "name": "te-escucho",
+  "version": "1.0.0",
+  "description": "Interfaz de chat con IA y grabación de voz",
+  "main": "app.js",
+  "scripts": {
+    "dev": "vite",
+    "start": "serve ."
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  }
+}
