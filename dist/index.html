@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Iconos de Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+  <link rel="stylesheet" crossorigin href="/assets/index-DkIfC9wK.css">
+</head>
+<body>
+    <!-- Modal for API Key -->
+    <div id="apiKeyModal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <h2>Configuración inicial</h2>
+            <p>Ingresa tu API Key de Groq para habilitar el reconocimiento de voz con Whisper. Esta clave solo se guardará localmente en tu navegador.</p>
+            <div class="input-group">
+                <input type="password" id="apiKeyInput" placeholder="gsk_..." autocomplete="off">
+                <button id="saveApiKeyBtn" class="btn-primary">Guardar</button>
+            </div>
+            <button id="skipApiKeyBtn" class="btn-text">Continuar sin audio por ahora</button>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div class="app-container">
+        <!-- Header -->
+        <header class="chat-header glass-panel">
+            <div class="avatar-container">
+                <div class="avatar ai-avatar">
+                    <span class="material-symbols-rounded">robot_2</span>
+                </div>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="header-info">
+                <h1>Asistente IA</h1>
+                <span class="status-text">En línea</span>
+            </div>
+            <button id="settingsBtn" class="icon-btn" title="Configurar API Key">
+                <span class="material-symbols-rounded">settings</span>
+            </button>
+        </header>
+
+        <!-- Chat Area -->
+        <main id="chatBox" class="chat-box">
+            <!-- Welcome message -->
+            <div class="message-wrapper ai-message">
+                <div class="message-bubble">
+                    Hola. Soy tu asistente de IA. Puedes escribirme un mensaje o enviarme una nota de voz.
+                </div>
+                <span class="message-time">Ahora</span>
+            </div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="chat-footer glass-panel">
+            <div id="recordingIndicator" class="recording-indicator hidden">
+                <div class="pulse-ring"></div>
+                <span class="material-symbols-rounded">mic</span>
+                <span id="recordingTimer">00:00</span>
+                <button id="cancelRecordBtn" class="icon-btn danger">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
+            </div>
+            
+            <form id="chatForm" class="input-area">
+                <button type="button" id="recordBtn" class="icon-btn mic-btn" title="Grabar audio">
+                    <span class="material-symbols-rounded">mic</span>
+                </button>
+                <div class="input-wrapper">
+                    <input type="text" id="messageInput" placeholder="Escribe un mensaje..." autocomplete="off">
+                </div>
+                <button type="submit" id="sendBtn" class="icon-btn send-btn" title="Enviar">
+                    <span class="material-symbols-rounded">send</span>
+                </button>
+            </form>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
