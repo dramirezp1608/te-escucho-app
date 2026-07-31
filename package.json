@@ -2,6 +2,7 @@
   "name": "te-escucho",
   "version": "1.0.0",
   "description": "Interfaz de chat con IA y grabación de voz",
+  "type": "module",
   "main": "app.js",
   "scripts": {
     "dev": "vite",
