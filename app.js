@@ -26,9 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!groqApiKey) {
         showModal();
     }
-    
-    // Conectar con el agente al cargar
-    initCopilotConversation();
 
     // Modal Events
     saveApiKeyBtn.addEventListener('click', () => {
@@ -439,4 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addSystemMessage("Error al enviar mensaje al agente.");
         }
     }
+
+    // Conectar con el agente al cargar
+    initCopilotConversation();
 });
