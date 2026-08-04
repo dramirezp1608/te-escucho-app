@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const apiKeyModal = document.getElementById('apiKeyModal');
     const apiKeyInput = document.getElementById('apiKeyInput');
+    const copilotSecretInput = document.getElementById('copilotSecretInput');
     const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
     const skipApiKeyBtn = document.getElementById('skipApiKeyBtn');
     const settingsBtn = document.getElementById('settingsBtn');
@@ -16,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // State
     let groqApiKey = localStorage.getItem('groqApiKey') || '';
+    let copilotSecret = localStorage.getItem('copilotSecret') || '';
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
@@ -23,16 +25,29 @@ document.addEventListener('DOMContentLoaded', () => {
     let recordingSeconds = 0;
 
     // Initialization
-    if (!groqApiKey) {
+    if (!groqApiKey || !copilotSecret) {
         showModal();
     }
 
     // Modal Events
     saveApiKeyBtn.addEventListener('click', () => {
         const key = apiKeyInput.value.trim();
+        const secret = copilotSecretInput.value.trim();
+        
         if (key) {
             groqApiKey = key;
             localStorage.setItem('groqApiKey', key);
+        }
+        if (secret) {
+            copilotSecret = secret;
+            localStorage.setItem('copilotSecret', secret);
+        }
+        
+        if (key && secret) {
+            hideModal();
+            // Reconectar con las nuevas credenciales
+            initCopilotConversation();
+        } else {
             hideModal();
         }
     });
@@ -42,6 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showModal() {
         apiKeyInput.value = groqApiKey;
+        if (copilotSecretInput) {
+            copilotSecretInput.value = copilotSecret;
+        }
         apiKeyModal.classList.add('active');
     }
 
@@ -333,12 +351,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let ws = null;
 
     async function initCopilotConversation() {
+        if (!copilotSecret) return; // Si no hay secreto, no intentamos conectar
         showTypingIndicator(); // Mostrar indicación de que está conectando
         try {
             const response = await fetch(COPILOT_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${copilotSecret}`
                 },
                 body: JSON.stringify({})
             });

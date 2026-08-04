@@ -18,7 +18,14 @@
             <h2>Configuración inicial</h2>
             <p>Ingresa tu API Key de Groq para habilitar el reconocimiento de voz con Whisper. Esta clave solo se guardará localmente en tu navegador.</p>
             <div class="input-group">
-                <input type="password" id="apiKeyInput" placeholder="gsk_..." autocomplete="off">
+                <label for="apiKeyInput">Groq API Key (Whisper)</label>
+                <input type="password" id="apiKeyInput" placeholder="gsk_...">
+            </div>
+            <div class="input-group">
+                <label for="copilotSecretInput">Copilot Direct Line Secret (Opcional si usas Token)</label>
+                <input type="password" id="copilotSecretInput" placeholder="Ingresa tu secreto o token de Copilot">
+            </div>
+            <div class="modal-buttons">
                 <button id="saveApiKeyBtn" class="btn-primary">Guardar</button>
             </div>
             <button id="skipApiKeyBtn" class="btn-text">Continuar sin audio por ahora</button>
