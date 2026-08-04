@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
     const skipApiKeyBtn = document.getElementById('skipApiKeyBtn');
     const settingsBtn = document.getElementById('settingsBtn');
+    const resetBtn = document.getElementById('resetBtn');
     const chatBox = document.getElementById('chatBox');
     const chatForm = document.getElementById('chatForm');
     const messageInput = document.getElementById('messageInput');
@@ -61,6 +62,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     skipApiKeyBtn.addEventListener('click', hideModal);
     settingsBtn.addEventListener('click', showModal);
+    
+    resetBtn.addEventListener('click', () => {
+        // Limpiar interfaz
+        chatBox.innerHTML = '';
+        
+        // Cerrar conexión actual si existe
+        if (ws) {
+            ws.close();
+            ws = null;
+        }
+        
+        copilotConversationId = '';
+        copilotToken = '';
+        
+        // Iniciar nueva conversación
+        initCopilotConversation();
+    });
 
     function showModal() {
         apiKeyInput.value = groqApiKey;
