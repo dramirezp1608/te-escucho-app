@@ -345,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Copilot Studio Integration
-    const COPILOT_URL = 'https://d798e95dfc894762ad0eb924726e73.b8.environment.api.powerplatform.com/copilotstudio/dataverse-backed/authenticated/bots/coem_Cuentame/conversations?api-version=2022-03-01-preview';
+    const COPILOT_URL = 'https://directline.botframework.com/v3/directline/conversations';
     let copilotConversationId = '';
     let copilotToken = '';
     let ws = null;
@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         showTypingIndicator();
-        const activitiesUrl = COPILOT_URL.split('?')[0] + `/${copilotConversationId}/activities?api-version=2022-03-01-preview`;
+        const activitiesUrl = `${COPILOT_URL}/${copilotConversationId}/activities`;
 
         try {
             const response = await fetch(activitiesUrl, {
