@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!groqApiKey) {
         showModal();
     }
+    
+    // Conectar con el agente al cargar
+    initCopilotConversation();
 
     // Modal Events
     saveApiKeyBtn.addEventListener('click', () => {
@@ -257,8 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
         messageInput.value = '';
         sendBtn.disabled = true;
 
-        // Simulamos la respuesta de la IA
-        simulateAIResponse(text);
+        // Enviamos el texto a Copilot Studio
+        sendToCopilot(text);
     }
 
     function addMessage(text, sender) {
@@ -326,26 +329,114 @@ document.addEventListener('DOMContentLoaded', () => {
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Mock AI Agent
-    function simulateAIResponse(userText) {
-        showTypingIndicator();
+    // Copilot Studio Integration
+    const COPILOT_URL = 'https://d798e95dfc894762ad0eb924726e73.b8.environment.api.powerplatform.com/copilotstudio/dataverse-backed/authenticated/bots/coem_Cuentame/conversations?api-version=2022-03-01-preview';
+    let copilotConversationId = '';
+    let copilotToken = '';
+    let ws = null;
 
-        // Tiempo de respuesta aleatorio entre 1 y 2.5 segundos
-        const delay = Math.random() * 1500 + 1000;
+    async function initCopilotConversation() {
+        showTypingIndicator(); // Mostrar indicación de que está conectando
+        try {
+            const response = await fetch(COPILOT_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({})
+            });
 
-        setTimeout(() => {
+            if (!response.ok) {
+                throw new Error(`Error en conexión: ${response.status}`);
+            }
+
+            const data = await response.json();
+            copilotConversationId = data.conversationId;
+            copilotToken = data.token;
+            
+            if (data.streamUrl) {
+                connectWebSocket(data.streamUrl);
+            }
+        } catch (error) {
+            console.error('Copilot init error:', error);
             removeTypingIndicator();
-            
-            // Generar una respuesta de prueba basada en la longitud
-            const responses = [
-                "¡Entendido! Como soy un agente de prueba, solo puedo simular una respuesta, pero he recibido tu mensaje correctamente.",
-                "Interesante punto. Cuando el backend esté conectado, aquí procesaré esa información.",
-                "¡Hola! He procesado tu mensaje. Esta interfaz está lista para conectarse al cerebro principal de IA.",
-                "Mensaje recibido alto y claro. El diseño glassmorphism hace que nuestra conversación luzca muy bien, ¿no crees?"
-            ];
-            
-            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-            addMessage(randomResponse, 'ai');
-        }, delay);
+            addSystemMessage("Error al conectar con Copilot Studio.");
+        }
+    }
+
+    function connectWebSocket(streamUrl) {
+        ws = new WebSocket(streamUrl);
+        
+        ws.onopen = () => {
+            console.log('Connected to Copilot Studio');
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                if (event.data) {
+                    const activity = JSON.parse(event.data);
+                    
+                    if (activity && activity.activities) {
+                        activity.activities.forEach(act => processActivity(act));
+                    } else if (activity && activity.type) {
+                        processActivity(activity);
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing WS message:', e);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket Error:', error);
+        };
+    }
+
+    function processActivity(activity) {
+        // Ignorar nuestros propios mensajes o si no existe from
+        if (activity.from && activity.from.role === 'user') return;
+        
+        if (activity.type === 'message' && activity.text) {
+            removeTypingIndicator();
+            addMessage(activity.text, 'ai');
+        } else if (activity.type === 'typing') {
+            showTypingIndicator();
+        }
+    }
+
+    async function sendToCopilot(text) {
+        if (!copilotConversationId) {
+            addSystemMessage("La conexión con el agente aún no está lista.");
+            return;
+        }
+
+        showTypingIndicator();
+        const activitiesUrl = COPILOT_URL.split('?')[0] + `/${copilotConversationId}/activities?api-version=2022-03-01-preview`;
+
+        try {
+            const response = await fetch(activitiesUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(copilotToken ? { 'Authorization': `Bearer ${copilotToken}` } : {})
+                },
+                body: JSON.stringify({
+                    type: 'message',
+                    text: text,
+                    from: {
+                        id: 'user1',
+                        role: 'user'
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to send message');
+            }
+        } catch (error) {
+            console.error('Copilot send error:', error);
+            removeTypingIndicator();
+            addSystemMessage("Error al enviar mensaje al agente.");
+        }
     }
 });
