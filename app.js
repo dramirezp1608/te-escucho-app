@@ -284,8 +284,14 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.className = `message-wrapper ${sender === 'user' ? 'user-message' : 'ai-message'}`;
 
         const bubble = document.createElement('div');
-        bubble.className = 'message-bubble';
-        bubble.textContent = text;
+        bubble.className = 'message-bubble markdown-body';
+        
+        if (sender === 'ai' && typeof marked !== 'undefined') {
+            // marked parsea las negritas y el markdown y lo devuelve como HTML
+            bubble.innerHTML = marked.parse(text);
+        } else {
+            bubble.textContent = text;
+        }
 
         const time = document.createElement('span');
         time.className = 'message-time';
@@ -315,6 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showTypingIndicator() {
+        if (document.getElementById('typingIndicator')) return; // No duplicar
+
         const wrapper = document.createElement('div');
         wrapper.className = 'message-wrapper ai-message typing-container';
         wrapper.id = 'typingIndicator';
@@ -334,10 +342,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function removeTypingIndicator() {
-        const indicator = document.getElementById('typingIndicator');
-        if (indicator) {
-            indicator.remove();
-        }
+        const indicators = document.querySelectorAll('#typingIndicator, .typing-container');
+        indicators.forEach(ind => ind.remove());
     }
 
     function scrollToBottom() {
@@ -386,6 +392,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         ws.onopen = () => {
             console.log('Connected to Copilot Studio');
+            // Forzar el saludo enviando el evento startConversation
+            triggerCopilotGreeting();
         };
 
         ws.onmessage = (event) => {
@@ -413,11 +421,85 @@ document.addEventListener('DOMContentLoaded', () => {
         // Ignorar nuestros propios mensajes o si no existe from
         if (activity.from && activity.from.role === 'user') return;
         
-        if (activity.type === 'message' && activity.text) {
+        if (activity.type === 'message') {
             removeTypingIndicator();
-            addMessage(activity.text, 'ai');
+            
+            if (activity.text) {
+                addMessage(activity.text, 'ai');
+            }
+            
+            // Renderizar Adaptive Cards
+            if (activity.attachments && activity.attachments.length > 0) {
+                activity.attachments.forEach(attachment => {
+                    if (attachment.contentType === 'application/vnd.microsoft.card.adaptive') {
+                        renderAdaptiveCard(attachment.content);
+                    }
+                });
+            }
         } else if (activity.type === 'typing') {
             showTypingIndicator();
+        }
+    }
+
+    async function triggerCopilotGreeting() {
+        if (!copilotConversationId) return;
+        const activitiesUrl = `${COPILOT_URL}/${copilotConversationId}/activities`;
+        try {
+            await fetch(activitiesUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(copilotSecret ? { 'Authorization': `Bearer ${copilotSecret}` } : {})
+                },
+                body: JSON.stringify({
+                    type: 'event',
+                    name: 'startConversation',
+                    from: { id: 'user1', role: 'user' }
+                })
+            });
+        } catch (err) {
+            console.error("Error triggering greeting:", err);
+        }
+    }
+
+    function renderAdaptiveCard(cardContent) {
+        if (typeof AdaptiveCards === 'undefined') return;
+        
+        const adaptiveCard = new AdaptiveCards.AdaptiveCard();
+        
+        // Host config básico
+        adaptiveCard.hostConfig = new AdaptiveCards.HostConfig({
+            fontFamily: "Inter, Roboto, sans-serif"
+        });
+        
+        // Permitir procesar markdown dentro de la tarjeta usando marked
+        AdaptiveCards.AdaptiveCard.onProcessMarkdown = function (text, result) {
+            if (typeof marked !== 'undefined') {
+                result.outputHtml = marked.parse(text);
+                result.didProcess = true;
+            }
+        };
+
+        adaptiveCard.parse(cardContent);
+        const renderedCard = adaptiveCard.render();
+        
+        if (renderedCard) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message-wrapper ai-message adaptive-card-wrapper';
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble markdown-body';
+            bubble.appendChild(renderedCard);
+            
+            const time = document.createElement('span');
+            time.className = 'message-time';
+            time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            wrapper.appendChild(bubble);
+            wrapper.appendChild(time);
+            
+            chatBox.appendChild(wrapper);
+            scrollToBottom();
         }
     }
 

@@ -460,3 +460,39 @@ body {
 .btn-text:hover {
     color: var(--text-primary);
 }
+
+/* Markdown & Adaptive Cards Styling */
+.markdown-body p {
+    margin: 0 0 0.5rem 0;
+}
+.markdown-body p:last-child {
+    margin: 0;
+}
+.markdown-body a {
+    color: #a855f7;
+    text-decoration: underline;
+}
+.markdown-body ul, .markdown-body ol {
+    margin: 0 0 0.5rem 1.2rem;
+    padding: 0;
+}
+.markdown-body strong {
+    font-weight: 600;
+    color: white;
+}
+.adaptive-card-wrapper .message-bubble {
+    padding: 0;
+    overflow: hidden;
+    background: transparent !important;
+    border: none !important;
+}
+.adaptive-card-wrapper .ac-container {
+    padding: 1rem;
+    background: var(--ai-msg-bg) !important;
+    border-radius: 18px;
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary) !important;
+}
+.ac-textBlock {
+    color: var(--text-primary) !important;
+}
