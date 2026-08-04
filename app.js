@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const apiKeyModal = document.getElementById('apiKeyModal');
     const apiKeyInput = document.getElementById('apiKeyInput');
+    const copilotUrlInput = document.getElementById('copilotUrlInput');
     const copilotSecretInput = document.getElementById('copilotSecretInput');
     const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
     const skipApiKeyBtn = document.getElementById('skipApiKeyBtn');
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // State
     let groqApiKey = localStorage.getItem('groqApiKey') || '';
+    let copilotUrl = localStorage.getItem('copilotUrl') || 'https://directline.botframework.com/v3/directline/conversations';
     let copilotSecret = localStorage.getItem('copilotSecret') || '';
     let mediaRecorder = null;
     let audioChunks = [];
@@ -25,25 +27,30 @@ document.addEventListener('DOMContentLoaded', () => {
     let recordingSeconds = 0;
 
     // Initialization
-    if (!groqApiKey || !copilotSecret) {
+    if (!groqApiKey || !copilotSecret || !copilotUrl) {
         showModal();
     }
 
     // Modal Events
     saveApiKeyBtn.addEventListener('click', () => {
         const key = apiKeyInput.value.trim();
+        const url = copilotUrlInput.value.trim();
         const secret = copilotSecretInput.value.trim();
         
         if (key) {
             groqApiKey = key;
             localStorage.setItem('groqApiKey', key);
         }
+        if (url) {
+            copilotUrl = url;
+            localStorage.setItem('copilotUrl', url);
+        }
         if (secret) {
             copilotSecret = secret;
             localStorage.setItem('copilotSecret', secret);
         }
         
-        if (key && secret) {
+        if (key && secret && url) {
             hideModal();
             // Reconectar con las nuevas credenciales
             initCopilotConversation();
@@ -57,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showModal() {
         apiKeyInput.value = groqApiKey;
+        if (copilotUrlInput) {
+            copilotUrlInput.value = copilotUrl;
+        }
         if (copilotSecretInput) {
             copilotSecretInput.value = copilotSecret;
         }
@@ -351,16 +361,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Copilot Studio Integration
-    const COPILOT_URL = 'https://directline.botframework.com/v3/directline/conversations';
     let copilotConversationId = '';
     let copilotToken = '';
     let ws = null;
 
     async function initCopilotConversation() {
-        if (!copilotSecret) return; // Si no hay secreto, no intentamos conectar
+        if (!copilotSecret || !copilotUrl) return; // Si faltan datos, no conectamos
         showTypingIndicator(); // Mostrar indicación de que está conectando
         try {
-            const response = await fetch(COPILOT_URL, {
+            const response = await fetch(copilotUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -443,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function triggerCopilotGreeting() {
         if (!copilotConversationId) return;
-        const activitiesUrl = `${COPILOT_URL}/${copilotConversationId}/activities`;
+        const activitiesUrl = `${copilotUrl}/${copilotConversationId}/activities`;
         try {
             await fetch(activitiesUrl, {
                 method: 'POST',
@@ -510,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         showTypingIndicator();
-        const activitiesUrl = `${COPILOT_URL}/${copilotConversationId}/activities`;
+        const activitiesUrl = `${copilotUrl}/${copilotConversationId}/activities`;
 
         try {
             const response = await fetch(activitiesUrl, {
