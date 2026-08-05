@@ -38,20 +38,28 @@ export async function onRequestGet(context) {
         const copilotSecret = copilotSecretObj.coem_valor;
         const copilotUrl = copilotUrlObj.coem_valor;
 
-        // 3. Generar token de conversación (Ocultando el secreto del frontend)
-        let tokenUrl = copilotUrl;
-        // Si el usuario puso el de conversations por defecto, lo cambiamos al de generar token
-        if (tokenUrl.endsWith('/conversations')) {
-            tokenUrl = tokenUrl.replace('/conversations', '/tokens/generate');
-        }
-
-        const chatResponse = await fetch(tokenUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${copilotSecret.trim()}` // Usamos trim() por si se copió con espacios
+        // 3. Generar token de conversación
+        let chatResponse;
+        
+        if (copilotUrl.includes('powerplatform.com') || copilotUrl.includes('powervirtualagents') || copilotUrl.includes('token')) {
+            // Es un "Token Endpoint URL" nativo de Copilot Studio (Canal: Custom Website)
+            chatResponse = await fetch(copilotUrl, {
+                method: 'GET'
+            });
+        } else {
+            // Es la URL de Bot Framework clásica (Direct Line)
+            let tokenUrl = copilotUrl;
+            if (tokenUrl.endsWith('/conversations')) {
+                tokenUrl = tokenUrl.replace('/conversations', '/tokens/generate');
             }
-        });
+            chatResponse = await fetch(tokenUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${copilotSecret.trim()}`
+                }
+            });
+        }
 
         if (!chatResponse.ok) {
             const errorText = await chatResponse.text();
