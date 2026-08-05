@@ -1,5 +1,5 @@
-import { verifyAdmin } from '../../../../utils/auth.js';
-import { dataverseRequest } from '../../../../utils/dataverse.js';
+import { verifyAdmin } from '../../../../../utils/auth.js';
+import { dataverseRequest } from '../../../../../utils/dataverse.js';
 
 export async function onRequestPatch(context) {
     try {
