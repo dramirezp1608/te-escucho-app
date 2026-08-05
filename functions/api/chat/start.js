@@ -39,11 +39,17 @@ export async function onRequestGet(context) {
         const copilotUrl = copilotUrlObj.coem_valor;
 
         // 3. Generar token de conversación (Ocultando el secreto del frontend)
-        const chatResponse = await fetch(copilotUrl, {
+        let tokenUrl = copilotUrl;
+        // Si el usuario puso el de conversations por defecto, lo cambiamos al de generar token
+        if (tokenUrl.endsWith('/conversations')) {
+            tokenUrl = tokenUrl.replace('/conversations', '/tokens/generate');
+        }
+
+        const chatResponse = await fetch(tokenUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${copilotSecret}`
+                'Authorization': `Bearer ${copilotSecret.trim()}` // Usamos trim() por si se copió con espacios
             }
         });
 
