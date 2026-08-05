@@ -1,79 +1,66 @@
-// --- CONFIGURACIÓN MSAL (Reemplazar con tus datos de Entra ID) ---
-const msalConfig = {
-    auth: {
-        clientId: "TU_CLIENT_ID_FRONTEND_AQUI", // El ID de la App registrada en Azure AD
-        authority: "https://login.microsoftonline.com/TU_TENANT_ID_AQUI", // Tu Tenant ID
-        redirectUri: window.location.href
-    },
-    cache: {
-        cacheLocation: "sessionStorage",
-        storeAuthStateInCookie: false,
-    }
-};
-
-const loginRequest = {
-    scopes: ["User.Read"]
-};
-
-let msalInstance;
-let accessToken = "";
-let currentAdminEmail = "";
+let accessToken = sessionStorage.getItem("adminToken") || "";
+let currentAdminEmail = sessionStorage.getItem("adminEmail") || "";
 
 // --- INICIALIZACIÓN ---
 document.addEventListener("DOMContentLoaded", async () => {
-    msalInstance = new msal.PublicClientApplication(msalConfig);
-    
-    // Check if already logged in
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-        msalInstance.setActiveAccount(accounts[0]);
-        await acquireToken();
+    if (accessToken) {
+        document.getElementById('userEmail').innerText = currentAdminEmail;
+        document.getElementById('loginScreen').classList.remove('active');
+        document.getElementById('dashboardScreen').style.display = 'flex';
+        loadProjects();
     }
 });
 
 // --- AUTENTICACIÓN ---
 document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    if(!email || !password) {
+        showError("Por favor ingresa correo y contraseña.");
+        return;
+    }
+    
+    document.getElementById('loginBtn').disabled = true;
+    document.getElementById('loginBtn').innerHTML = 'Iniciando...';
+    
     try {
-        const loginResponse = await msalInstance.loginPopup(loginRequest);
-        msalInstance.setActiveAccount(loginResponse.account);
-        await acquireToken();
+        const res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || "Error al iniciar sesión");
+        }
+        
+        accessToken = data.token;
+        currentAdminEmail = data.email;
+        
+        sessionStorage.setItem("adminToken", accessToken);
+        sessionStorage.setItem("adminEmail", currentAdminEmail);
+        
+        document.getElementById('userEmail').innerText = currentAdminEmail;
+        document.getElementById('loginScreen').classList.remove('active');
+        document.getElementById('dashboardScreen').style.display = 'flex';
+        
+        loadProjects();
     } catch (err) {
-        showError("Error al iniciar sesión con Microsoft.");
-        console.error(err);
+        showError(err.message);
+    } finally {
+        document.getElementById('loginBtn').disabled = false;
+        document.getElementById('loginBtn').innerHTML = '<span class="material-symbols-rounded">login</span> Iniciar Sesión';
     }
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
-    msalInstance.logoutPopup({
-        mainWindowRedirectUri: window.location.href
-    });
+    sessionStorage.removeItem("adminToken");
+    sessionStorage.removeItem("adminEmail");
+    window.location.reload();
 });
-
-async function acquireToken() {
-    try {
-        const account = msalInstance.getActiveAccount();
-        if (!account) throw new Error("No active account");
-        
-        const response = await msalInstance.acquireTokenSilent({
-            ...loginRequest,
-            account: account
-        });
-        
-        accessToken = response.accessToken;
-        currentAdminEmail = account.username;
-        document.getElementById('userEmail').innerText = currentAdminEmail;
-        
-        // Ocultar login, mostrar dashboard
-        document.getElementById('loginScreen').classList.remove('active');
-        document.getElementById('dashboardScreen').style.display = 'flex';
-        
-        // Cargar datos
-        loadProjects();
-    } catch (err) {
-        showError("No se pudo obtener el token silenciosamente. Inicia sesión nuevamente.");
-        console.error(err);
-    }
-}
 
 function showError(msg) {
     const el = document.getElementById('loginError');
@@ -277,7 +264,8 @@ async function loadUsers() {
 
 function saveUser() {
     const body = {
-        coem_correo: document.getElementById('userEmailInput').value
+        coem_correo: document.getElementById('userEmailInput').value,
+        coem_password: document.getElementById('userPasswordInput').value
     };
     apiCall('users', 'POST', body).then(() => {
         closeModal('userModal');
@@ -305,6 +293,11 @@ window.openModal = function(id) {
         document.getElementById('paramId').value = '';
         document.getElementById('paramName').value = '';
         document.getElementById('paramValue').value = '';
+    }
+    if(id === 'userModal') {
+        document.getElementById('userId').value = '';
+        document.getElementById('userEmailInput').value = '';
+        document.getElementById('userPasswordInput').value = '';
     }
     document.getElementById(id).classList.add('active');
 }
