@@ -48,7 +48,8 @@ export async function onRequestGet(context) {
         });
 
         if (!chatResponse.ok) {
-            throw new Error("No se pudo iniciar la conversación con Copilot Studio");
+            const errorText = await chatResponse.text();
+            throw new Error(`Copilot Studio Error (${chatResponse.status}): ${errorText}`);
         }
 
         const chatData = await chatResponse.json();
