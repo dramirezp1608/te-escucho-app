@@ -25,7 +25,7 @@ export async function onRequestGet(context) {
         }
 
         // 2. Obtener parámetros de conexión
-        const paramsResult = await dataverseRequest(context.env, 'coem_parametroglobals');
+        const paramsResult = await dataverseRequest(context.env, 'coem_parametroglobalideacions');
         const paramsList = paramsResult.value || [];
         
         const copilotSecretObj = paramsList.find(p => p.coem_nombre === 'CopilotSecret');

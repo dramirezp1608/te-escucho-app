@@ -208,7 +208,7 @@ async function loadParams() {
     tbody.innerHTML = '';
     
     data.forEach(p => {
-        const id = p.coem_parametroglobalid;
+        const id = p.coem_parametroglobalideacionid;
         tbody.innerHTML += `
             <tr>
                 <td>${p.coem_nombre}</td>
@@ -240,7 +240,7 @@ function saveParam() {
 
 async function editParam(id) {
     const data = await apiCall('params');
-    const p = data.find(x => x.coem_parametroglobalid === id);
+    const p = data.find(x => x.coem_parametroglobalideacionid === id);
     if (!p) return;
     
     document.getElementById('paramId').value = id;

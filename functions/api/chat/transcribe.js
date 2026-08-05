@@ -3,7 +3,7 @@ import { dataverseRequest } from '../../utils/dataverse.js';
 export async function onRequestPost(context) {
     try {
         // 1. Obtener GroqApiKey de Dataverse
-        const paramsResult = await dataverseRequest(context.env, 'coem_parametroglobals');
+        const paramsResult = await dataverseRequest(context.env, 'coem_parametroglobalideacions');
         const paramsList = paramsResult.value || [];
         const groqApiObj = paramsList.find(p => p.coem_nombre === 'GroqApiKey');
 

@@ -6,7 +6,7 @@ export async function onRequestPatch(context) {
         await verifyAdmin(context.request, context.env);
         const id = context.params.id;
         const body = await context.request.json();
-        const result = await dataverseRequest(context.env, `coem_parametroglobals(${id})`, 'PATCH', body);
+        const result = await dataverseRequest(context.env, `coem_parametroglobalideacions(${id})`, 'PATCH', body);
         return Response.json(result);
     } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -17,7 +17,7 @@ export async function onRequestDelete(context) {
     try {
         await verifyAdmin(context.request, context.env);
         const id = context.params.id;
-        await dataverseRequest(context.env, `coem_parametroglobals(${id})`, 'DELETE');
+        await dataverseRequest(context.env, `coem_parametroglobalideacions(${id})`, 'DELETE');
         return Response.json({ success: true });
     } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 401, headers: { 'Content-Type': 'application/json' } });
