@@ -1,4 +1,4 @@
-import { dataverseRequest } from '../../../utils/dataverse.js';
+import { dataverseRequest } from '../../utils/dataverse.js';
 
 export async function onRequestGet(context) {
     try {
