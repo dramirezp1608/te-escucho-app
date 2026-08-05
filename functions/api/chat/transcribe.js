@@ -13,13 +13,17 @@ export async function onRequestPost(context) {
 
         const groqApiKey = groqApiObj.coem_valor;
 
-        // 2. Extraer el audio enviado desde el frontend y añadir configuración
-        const formData = await context.request.formData();
+        // 2. Extraer el audio enviado y construir un nuevo FormData
+        // Cloudflare Workers a veces falla si mutamos el formData original o lo reenviamos directamente
+        const incomingData = await context.request.formData();
+        const outgoingFormData = new FormData();
         
-        // Groq exige que enviemos el modelo
-        if (!formData.has('model')) {
-            formData.append('model', 'whisper-large-v3');
+        for (const [key, value] of incomingData.entries()) {
+            outgoingFormData.append(key, value);
         }
+        
+        // Añadir explícitamente el modelo
+        outgoingFormData.set('model', 'whisper-large-v3');
         
         // 3. Reenviar a Groq de forma segura
         const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -27,7 +31,7 @@ export async function onRequestPost(context) {
             headers: {
                 'Authorization': `Bearer ${groqApiKey}`
             },
-            body: formData
+            body: outgoingFormData
         });
 
         if (!groqResponse.ok) {

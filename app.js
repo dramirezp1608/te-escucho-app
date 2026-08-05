@@ -245,8 +245,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `API Error: ${response.status}`);
+                const text = await response.text();
+                let errorMsg = `API Error: ${response.status}`;
+                try {
+                    const errorData = JSON.parse(text);
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    errorMsg = `Cloudflare Error (${response.status}): ${text.substring(0, 100)}`;
+                }
+                throw new Error(errorMsg);
             }
 
             const data = await response.json();
