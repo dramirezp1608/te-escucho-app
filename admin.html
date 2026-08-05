@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Cuentame AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="admin.css">
+    <!-- Librería MSAL para login con Microsoft -->
+    <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
+    <!-- Librería QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <!-- Pantalla de Login -->
+    <div id="loginScreen" class="screen active">
+        <div class="login-card glass-panel">
+            <div class="avatar ai-avatar"><span>🤖</span></div>
+            <h2>Panel de Control</h2>
+            <p>Inicia sesión con tu cuenta corporativa para administrar Cuentame AI.</p>
+            <button id="loginBtn" class="btn-primary">
+                <span class="material-symbols-rounded">login</span>
+                Iniciar Sesión con Microsoft
+            </button>
+            <p id="loginError" class="error-msg" style="display:none;"></p>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboardScreen" class="screen" style="display:none;">
+        <nav class="sidebar glass-panel">
+            <div class="sidebar-header">
+                <h3>Admin Panel</h3>
+                <p id="userEmail" class="user-email"></p>
+            </div>
+            <ul class="nav-links">
+                <li><button class="nav-btn active" data-target="projectsSection"><span class="material-symbols-rounded">rocket_launch</span> Proyectos</button></li>
+                <li><button class="nav-btn" data-target="paramsSection"><span class="material-symbols-rounded">settings</span> Parámetros</button></li>
+                <li><button class="nav-btn" data-target="usersSection"><span class="material-symbols-rounded">group</span> Administradores</button></li>
+            </ul>
+            <div class="sidebar-footer">
+                <button id="logoutBtn" class="btn-secondary">Cerrar Sesión</button>
+            </div>
+        </nav>
+
+        <main class="content">
+            <!-- Sección Proyectos -->
+            <section id="projectsSection" class="admin-section active">
+                <div class="section-header">
+                    <h2>Proyectos de Innovación</h2>
+                    <button class="btn-primary" onclick="openModal('projectModal')">Nuevo Proyecto</button>
+                </div>
+                <div class="table-container glass-panel">
+                    <table id="projectsTable">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Inicio</th>
+                                <th>Fin</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Sección Parámetros -->
+            <section id="paramsSection" class="admin-section" style="display:none;">
+                <div class="section-header">
+                    <h2>Parámetros Globales</h2>
+                    <button class="btn-primary" onclick="openModal('paramModal')">Nuevo Parámetro</button>
+                </div>
+                <div class="table-container glass-panel">
+                    <table id="paramsTable">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Valor</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Sección Administradores -->
+            <section id="usersSection" class="admin-section" style="display:none;">
+                <div class="section-header">
+                    <h2>Administradores</h2>
+                    <button class="btn-primary" onclick="openModal('userModal')">Nuevo Administrador</button>
+                </div>
+                <div class="table-container glass-panel">
+                    <table id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>Correo (Entra ID)</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modales CRUD -->
+    <!-- Modal Proyecto -->
+    <div id="projectModal" class="modal glass-panel">
+        <div class="modal-content">
+            <h3 id="projectModalTitle">Nuevo Proyecto</h3>
+            <input type="hidden" id="projectId">
+            <div class="input-group">
+                <label>Nombre del Cliente</label>
+                <input type="text" id="projectClient">
+            </div>
+            <div class="input-group">
+                <label>Descripción</label>
+                <textarea id="projectDesc"></textarea>
+            </div>
+            <div class="input-group">
+                <label>Fecha Inicio</label>
+                <input type="datetime-local" id="projectStart">
+            </div>
+            <div class="input-group">
+                <label>Fecha Fin</label>
+                <input type="datetime-local" id="projectEnd">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeModal('projectModal')">Cancelar</button>
+                <button class="btn-primary" onclick="saveProject()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal QR -->
+    <div id="qrModal" class="modal glass-panel">
+        <div class="modal-content" style="text-align: center;">
+            <h3>Código QR del Proyecto</h3>
+            <p style="font-size: 12px; margin-bottom: 15px;">Escanea este código para entrar al chat</p>
+            <div id="qrcode" style="display: flex; justify-content: center; background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;"></div>
+            <a id="qrLink" href="#" target="_blank" style="color: #a855f7; display: block; margin-bottom: 20px; word-break: break-all;"></a>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeModal('qrModal')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Parámetro -->
+    <div id="paramModal" class="modal glass-panel">
+        <div class="modal-content">
+            <h3 id="paramModalTitle">Nuevo Parámetro</h3>
+            <input type="hidden" id="paramId">
+            <div class="input-group">
+                <label>Nombre (Ej: GroqApiKey)</label>
+                <input type="text" id="paramName">
+            </div>
+            <div class="input-group">
+                <label>Valor</label>
+                <input type="text" id="paramValue">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeModal('paramModal')">Cancelar</button>
+                <button class="btn-primary" onclick="saveParam()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Usuario -->
+    <div id="userModal" class="modal glass-panel">
+        <div class="modal-content">
+            <h3 id="userModalTitle">Nuevo Administrador</h3>
+            <input type="hidden" id="userId">
+            <div class="input-group">
+                <label>Correo Electrónico</label>
+                <input type="email" id="userEmailInput">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeModal('userModal')">Cancelar</button>
+                <button class="btn-primary" onclick="saveUser()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

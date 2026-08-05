@@ -1,0 +1,317 @@
+// --- CONFIGURACIÓN MSAL (Reemplazar con tus datos de Entra ID) ---
+const msalConfig = {
+    auth: {
+        clientId: "TU_CLIENT_ID_FRONTEND_AQUI", // El ID de la App registrada en Azure AD
+        authority: "https://login.microsoftonline.com/TU_TENANT_ID_AQUI", // Tu Tenant ID
+        redirectUri: window.location.href
+    },
+    cache: {
+        cacheLocation: "sessionStorage",
+        storeAuthStateInCookie: false,
+    }
+};
+
+const loginRequest = {
+    scopes: ["User.Read"]
+};
+
+let msalInstance;
+let accessToken = "";
+let currentAdminEmail = "";
+
+// --- INICIALIZACIÓN ---
+document.addEventListener("DOMContentLoaded", async () => {
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+    
+    // Check if already logged in
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+        msalInstance.setActiveAccount(accounts[0]);
+        await acquireToken();
+    }
+});
+
+// --- AUTENTICACIÓN ---
+document.getElementById('loginBtn').addEventListener('click', async () => {
+    try {
+        const loginResponse = await msalInstance.loginPopup(loginRequest);
+        msalInstance.setActiveAccount(loginResponse.account);
+        await acquireToken();
+    } catch (err) {
+        showError("Error al iniciar sesión con Microsoft.");
+        console.error(err);
+    }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+    msalInstance.logoutPopup({
+        mainWindowRedirectUri: window.location.href
+    });
+});
+
+async function acquireToken() {
+    try {
+        const account = msalInstance.getActiveAccount();
+        if (!account) throw new Error("No active account");
+        
+        const response = await msalInstance.acquireTokenSilent({
+            ...loginRequest,
+            account: account
+        });
+        
+        accessToken = response.accessToken;
+        currentAdminEmail = account.username;
+        document.getElementById('userEmail').innerText = currentAdminEmail;
+        
+        // Ocultar login, mostrar dashboard
+        document.getElementById('loginScreen').classList.remove('active');
+        document.getElementById('dashboardScreen').style.display = 'flex';
+        
+        // Cargar datos
+        loadProjects();
+    } catch (err) {
+        showError("No se pudo obtener el token silenciosamente. Inicia sesión nuevamente.");
+        console.error(err);
+    }
+}
+
+function showError(msg) {
+    const el = document.getElementById('loginError');
+    el.innerText = msg;
+    el.style.display = 'block';
+}
+
+// --- NAVEGACIÓN ---
+document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        
+        document.querySelectorAll('.admin-section').forEach(s => s.style.display = 'none');
+        const target = e.currentTarget.getAttribute('data-target');
+        document.getElementById(target).style.display = 'block';
+        
+        if (target === 'projectsSection') loadProjects();
+        if (target === 'paramsSection') loadParams();
+        if (target === 'usersSection') loadUsers();
+    });
+});
+
+// --- API HELPER ---
+async function apiCall(endpoint, method = 'GET', body = null) {
+    const options = {
+        method,
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        }
+    };
+    if (body) options.body = JSON.stringify(body);
+    
+    const res = await fetch(`/api/admin/${endpoint}`, options);
+    if (!res.ok) {
+        const text = await res.text();
+        alert(`Error: ${text}`);
+        throw new Error(text);
+    }
+    return res.status === 204 ? null : await res.json();
+}
+
+// --- CRUD PROYECTOS ---
+async function loadProjects() {
+    const data = await apiCall('projects');
+    const tbody = document.querySelector('#projectsTable tbody');
+    tbody.innerHTML = '';
+    
+    data.forEach(p => {
+        // En Dataverse el primary key suele ser el logical name sin prefijo + id
+        const id = p.coem_proyectoinnovacionid;
+        const start = new Date(p.coem_fechainicio).toLocaleDateString();
+        const end = new Date(p.coem_fechafin).toLocaleDateString();
+        
+        tbody.innerHTML += `
+            <tr>
+                <td>${p.coem_nombrecliente || 'Sin nombre'}</td>
+                <td>${start}</td>
+                <td>${end}</td>
+                <td class="actions">
+                    <button class="btn-icon" onclick="showQR('${id}')" title="Generar QR"><span class="material-symbols-rounded">qr_code</span></button>
+                    <button class="btn-icon" onclick="editProject('${id}')" title="Editar"><span class="material-symbols-rounded">edit</span></button>
+                    <button class="btn-icon" onclick="deleteProject('${id}')" title="Eliminar"><span class="material-symbols-rounded">delete</span></button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function saveProject() {
+    const id = document.getElementById('projectId').value;
+    const body = {
+        coem_nombrecliente: document.getElementById('projectClient').value,
+        coem_descripcion: document.getElementById('projectDesc').value,
+        coem_fechainicio: new Date(document.getElementById('projectStart').value).toISOString(),
+        coem_fechafin: new Date(document.getElementById('projectEnd').value).toISOString()
+    };
+    
+    const method = id ? 'PATCH' : 'POST';
+    const endpoint = id ? `projects/${id}` : 'projects';
+    
+    apiCall(endpoint, method, body).then(() => {
+        closeModal('projectModal');
+        loadProjects();
+    });
+}
+
+async function editProject(id) {
+    const data = await apiCall('projects');
+    const p = data.find(x => x.coem_proyectoinnovacionid === id);
+    if (!p) return;
+    
+    document.getElementById('projectId').value = id;
+    document.getElementById('projectClient').value = p.coem_nombrecliente;
+    document.getElementById('projectDesc').value = p.coem_descripcion;
+    document.getElementById('projectStart').value = p.coem_fechainicio.substring(0, 16);
+    document.getElementById('projectEnd').value = p.coem_fechafin.substring(0, 16);
+    document.getElementById('projectModalTitle').innerText = 'Editar Proyecto';
+    openModal('projectModal');
+}
+
+function deleteProject(id) {
+    if (confirm("¿Estás seguro de eliminar este proyecto?")) {
+        apiCall(`projects/${id}`, 'DELETE').then(() => loadProjects());
+    }
+}
+
+function showQR(id) {
+    const url = `${window.location.origin}/?id=${id}`;
+    document.getElementById('qrcode').innerHTML = '';
+    new QRCode(document.getElementById('qrcode'), {
+        text: url,
+        width: 200,
+        height: 200,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+    
+    const linkEl = document.getElementById('qrLink');
+    linkEl.href = url;
+    linkEl.innerText = url;
+    
+    openModal('qrModal');
+}
+
+// --- CRUD PARAMETROS ---
+async function loadParams() {
+    const data = await apiCall('params');
+    const tbody = document.querySelector('#paramsTable tbody');
+    tbody.innerHTML = '';
+    
+    data.forEach(p => {
+        const id = p.coem_parametroglobalid;
+        tbody.innerHTML += `
+            <tr>
+                <td>${p.coem_nombre}</td>
+                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.coem_valor || ''}</td>
+                <td class="actions">
+                    <button class="btn-icon" onclick="editParam('${id}')" title="Editar"><span class="material-symbols-rounded">edit</span></button>
+                    <button class="btn-icon" onclick="deleteParam('${id}')" title="Eliminar"><span class="material-symbols-rounded">delete</span></button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function saveParam() {
+    const id = document.getElementById('paramId').value;
+    const body = {
+        coem_nombre: document.getElementById('paramName').value,
+        coem_valor: document.getElementById('paramValue').value
+    };
+    
+    const method = id ? 'PATCH' : 'POST';
+    const endpoint = id ? `params/${id}` : 'params';
+    
+    apiCall(endpoint, method, body).then(() => {
+        closeModal('paramModal');
+        loadParams();
+    });
+}
+
+async function editParam(id) {
+    const data = await apiCall('params');
+    const p = data.find(x => x.coem_parametroglobalid === id);
+    if (!p) return;
+    
+    document.getElementById('paramId').value = id;
+    document.getElementById('paramName').value = p.coem_nombre;
+    document.getElementById('paramValue').value = p.coem_valor;
+    document.getElementById('paramModalTitle').innerText = 'Editar Parámetro';
+    openModal('paramModal');
+}
+
+function deleteParam(id) {
+    if (confirm("¿Estás seguro de eliminar este parámetro?")) {
+        apiCall(`params/${id}`, 'DELETE').then(() => loadParams());
+    }
+}
+
+// --- CRUD USUARIOS ---
+async function loadUsers() {
+    const data = await apiCall('users');
+    const tbody = document.querySelector('#usersTable tbody');
+    tbody.innerHTML = '';
+    
+    data.forEach(p => {
+        const id = p.coem_administradorid;
+        tbody.innerHTML += `
+            <tr>
+                <td>${p.coem_correo}</td>
+                <td class="actions">
+                    <button class="btn-icon" onclick="deleteUser('${id}')" title="Eliminar"><span class="material-symbols-rounded">delete</span></button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function saveUser() {
+    const body = {
+        coem_correo: document.getElementById('userEmailInput').value
+    };
+    apiCall('users', 'POST', body).then(() => {
+        closeModal('userModal');
+        loadUsers();
+    });
+}
+
+function deleteUser(id) {
+    if (confirm("¿Estás seguro de eliminar este administrador? Perderá el acceso.")) {
+        apiCall(`users/${id}`, 'DELETE').then(() => loadUsers());
+    }
+}
+
+// --- UTILIDADES DE MODAL ---
+window.openModal = function(id) {
+    // Limpiar inputs al abrir para crear
+    if(id === 'projectModal' && document.getElementById('projectModalTitle').innerText === 'Nuevo Proyecto') {
+        document.getElementById('projectId').value = '';
+        document.getElementById('projectClient').value = '';
+        document.getElementById('projectDesc').value = '';
+        document.getElementById('projectStart').value = '';
+        document.getElementById('projectEnd').value = '';
+    }
+    if(id === 'paramModal' && document.getElementById('paramModalTitle').innerText === 'Nuevo Parámetro') {
+        document.getElementById('paramId').value = '';
+        document.getElementById('paramName').value = '';
+        document.getElementById('paramValue').value = '';
+    }
+    document.getElementById(id).classList.add('active');
+}
+
+window.closeModal = function(id) {
+    document.getElementById(id).classList.remove('active');
+    // Restablecer títulos
+    if(id === 'projectModal') document.getElementById('projectModalTitle').innerText = 'Nuevo Proyecto';
+    if(id === 'paramModal') document.getElementById('paramModalTitle').innerText = 'Nuevo Parámetro';
+}

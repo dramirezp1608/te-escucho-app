@@ -1,12 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
-    const apiKeyModal = document.getElementById('apiKeyModal');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const copilotUrlInput = document.getElementById('copilotUrlInput');
-    const copilotSecretInput = document.getElementById('copilotSecretInput');
-    const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-    const skipApiKeyBtn = document.getElementById('skipApiKeyBtn');
-    const settingsBtn = document.getElementById('settingsBtn');
+    const authScreen = document.getElementById('authScreen');
+    const authTitle = document.getElementById('authTitle');
+    const authMessage = document.getElementById('authMessage');
+    const chatApp = document.getElementById('chatApp');
+    const chatStatus = document.getElementById('chatStatus');
+    
     const resetBtn = document.getElementById('resetBtn');
     const chatBox = document.getElementById('chatBox');
     const chatForm = document.getElementById('chatForm');
@@ -18,82 +17,70 @@ document.addEventListener('DOMContentLoaded', () => {
     const recordingTimer = document.getElementById('recordingTimer');
 
     // State
-    let groqApiKey = localStorage.getItem('groqApiKey') || '';
-    let copilotUrl = localStorage.getItem('copilotUrl') || 'https://directline.botframework.com/v3/directline/conversations';
-    let copilotSecret = localStorage.getItem('copilotSecret') || '';
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
     let recordingInterval = null;
     let recordingSeconds = 0;
 
-    // Initialization
-    if (!groqApiKey || !copilotSecret || !copilotUrl) {
-        showModal();
+    // Copilot State
+    let copilotConversationId = '';
+    let copilotToken = '';
+    let ws = null;
+    let copilotUrl = '';
+
+    // Initialization & Validation
+    async function initializeApp() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const projectId = urlParams.get('id');
+
+        if (!projectId) {
+            showAccessDenied("No se ha proporcionado un identificador de proyecto válido. Escanea el código QR oficial.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/chat/start?id=${projectId}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Error de validación de proyecto.');
+            }
+
+            // Secure connection established via backend
+            copilotToken = data.copilotToken;
+            copilotConversationId = data.conversationId;
+            copilotUrl = data.endpoint;
+
+            // Update UI
+            if (authScreen) authScreen.style.display = 'none';
+            if (chatApp) chatApp.style.display = 'flex';
+            if (chatStatus) chatStatus.innerText = "En línea";
+
+            // Start WebSocket
+            connectWebSocket(data.streamUrl);
+
+        } catch (e) {
+            showAccessDenied(e.message);
+        }
     }
 
-    // Modal Events
-    saveApiKeyBtn.addEventListener('click', () => {
-        const key = apiKeyInput.value.trim();
-        const url = copilotUrlInput.value.trim();
-        const secret = copilotSecretInput.value.trim();
-        
-        if (key) {
-            groqApiKey = key;
-            localStorage.setItem('groqApiKey', key);
+    function showAccessDenied(msg) {
+        if (authTitle) {
+            authTitle.innerText = "Acceso Denegado";
+            authTitle.style.color = "var(--danger)";
         }
-        if (url) {
-            copilotUrl = url;
-            localStorage.setItem('copilotUrl', url);
-        }
-        if (secret) {
-            copilotSecret = secret;
-            localStorage.setItem('copilotSecret', secret);
-        }
-        
-        if (key && secret && url) {
-            hideModal();
-            // Reconectar con las nuevas credenciales
-            initCopilotConversation();
-        } else {
-            hideModal();
-        }
-    });
+        if (authMessage) authMessage.innerText = msg;
+    }
 
-    skipApiKeyBtn.addEventListener('click', hideModal);
-    settingsBtn.addEventListener('click', showModal);
-    
+    // Call init
+    initializeApp();
+
+    // Reset Events
     resetBtn.addEventListener('click', () => {
-        // Limpiar interfaz
-        chatBox.innerHTML = '';
-        
-        // Cerrar conexión actual si existe
-        if (ws) {
-            ws.close();
-            ws = null;
-        }
-        
-        copilotConversationId = '';
-        copilotToken = '';
-        
-        // Iniciar nueva conversación
-        initCopilotConversation();
+        // En lugar de limpiar, recargamos la página para revalidar el token y limpiar el estado por completo
+        window.location.reload();
     });
-
-    function showModal() {
-        apiKeyInput.value = groqApiKey;
-        if (copilotUrlInput) {
-            copilotUrlInput.value = copilotUrl;
-        }
-        if (copilotSecretInput) {
-            copilotSecretInput.value = copilotSecret;
-        }
-        apiKeyModal.classList.add('active');
-    }
-
-    function hideModal() {
-        apiKeyModal.classList.remove('active');
-    }
 
     // Chat Events
     chatForm.addEventListener('submit', (e) => {
@@ -130,12 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isPressing = false;
 
         const pressDuration = Date.now() - recordStartTime;
-        // Si fue un toque rápido (< 400ms), lo dejamos grabando (toggle mode)
-        if (pressDuration < 400) {
-            return;
-        }
+        if (pressDuration < 400) return;
         
-        // Si mantuvo presionado, detenemos al soltar
         if (isRecording) {
             stopRecording(true);
         } else {
@@ -145,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     recordBtn.addEventListener('touchstart', (e) => {
         isTouchDevice = true;
-        e.preventDefault(); // Evitar menú contextual
+        e.preventDefault();
         handlePress();
     }, { passive: false });
 
@@ -159,7 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
         handleRelease();
     });
 
-    // Ignorar eventos de mouse si es dispositivo táctil
     recordBtn.addEventListener('mousedown', (e) => {
         if (isTouchDevice || e.button !== 0) return;
         handlePress();
@@ -179,21 +161,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function startRecording() {
-        if (!groqApiKey) {
-            alert('Por favor, configura tu API Key de Groq primero para usar esta función.');
-            showModal();
-            return;
-        }
-
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
 
             mediaRecorder.addEventListener('dataavailable', event => {
-                if (event.data.size > 0) {
-                    audioChunks.push(event.data);
-                }
+                if (event.data.size > 0) audioChunks.push(event.data);
             });
 
             mediaRecorder.addEventListener('stop', async () => {
@@ -210,7 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaRecorder.start();
             isRecording = true;
             
-            // Update UI
             recordBtn.classList.add('recording');
             recordingIndicator.classList.remove('hidden');
             recordingSeconds = 0;
@@ -236,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function stopRecording(process = true) {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            isRecording = process; // Si process es false, indicamos que se canceló
+            isRecording = process; 
             mediaRecorder.stop();
         }
     }
@@ -260,20 +233,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function processAudio(audioBlob) {
-        // Mostrar un mensaje de que estamos transcribiendo
-        addSystemMessage("Transcribiendo audio con Whisper...");
+        addSystemMessage("Transcribiendo audio...");
         
         try {
             const formData = new FormData();
             formData.append('file', audioBlob, 'audio.webm');
-            formData.append('model', 'whisper-large-v3');
-            // formData.append('language', 'es'); // Opcional, forzar español
 
-            const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            // API key is hidden in the Cloudflare backend now
+            const response = await fetch('/api/chat/transcribe', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${groqApiKey}`
-                },
                 body: formData
             });
 
@@ -282,8 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
-            
-            // Remover el mensaje de "transcribiendo"
             chatBox.lastElementChild.remove();
             
             if (data.text) {
@@ -293,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Transcription error:', error);
             chatBox.lastElementChild.remove();
-            addSystemMessage("Error al transcribir el audio. Revisa tu API key.");
+            addSystemMessage("Error al transcribir el audio.");
         }
     }
 
@@ -302,8 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
         addMessage(text, 'user');
         messageInput.value = '';
         sendBtn.disabled = true;
-
-        // Enviamos el texto a Copilot Studio
         sendToCopilot(text);
     }
 
@@ -315,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
         bubble.className = 'message-bubble markdown-body';
         
         if (sender === 'ai' && typeof marked !== 'undefined') {
-            // marked parsea las negritas y el markdown y lo devuelve como HTML
             bubble.innerHTML = marked.parse(text);
         } else {
             bubble.textContent = text;
@@ -349,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showTypingIndicator() {
-        if (document.getElementById('typingIndicator')) return; // No duplicar
+        if (document.getElementById('typingIndicator')) return; 
 
         const wrapper = document.createElement('div');
         wrapper.className = 'message-wrapper ai-message typing-container';
@@ -378,48 +341,11 @@ document.addEventListener('DOMContentLoaded', () => {
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Copilot Studio Integration
-    let copilotConversationId = '';
-    let copilotToken = '';
-    let ws = null;
-
-    async function initCopilotConversation() {
-        if (!copilotSecret || !copilotUrl) return; // Si faltan datos, no conectamos
-        showTypingIndicator(); // Mostrar indicación de que está conectando
-        try {
-            const response = await fetch(copilotUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${copilotSecret}`
-                },
-                body: JSON.stringify({})
-            });
-
-            if (!response.ok) {
-                throw new Error(`Error en conexión: ${response.status}`);
-            }
-
-            const data = await response.json();
-            copilotConversationId = data.conversationId;
-            copilotToken = data.token;
-            
-            if (data.streamUrl) {
-                connectWebSocket(data.streamUrl);
-            }
-        } catch (error) {
-            console.error('Copilot init error:', error);
-            removeTypingIndicator();
-            addSystemMessage("Error al conectar con Copilot Studio.");
-        }
-    }
-
     function connectWebSocket(streamUrl) {
         ws = new WebSocket(streamUrl);
         
         ws.onopen = () => {
-            console.log('Connected to Copilot Studio');
-            // Forzar el saludo enviando el evento startConversation
+            console.log('Connected to Copilot Studio via secure proxy');
             triggerCopilotGreeting();
         };
 
@@ -427,7 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 if (event.data) {
                     const activity = JSON.parse(event.data);
-                    
                     if (activity && activity.activities) {
                         activity.activities.forEach(act => processActivity(act));
                     } else if (activity && activity.type) {
@@ -439,23 +364,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        ws.onerror = (error) => {
-            console.error('WebSocket Error:', error);
-        };
+        ws.onerror = (error) => console.error('WebSocket Error:', error);
     }
 
     function processActivity(activity) {
-        // Ignorar nuestros propios mensajes o si no existe from
         if (activity.from && activity.from.role === 'user') return;
         
         if (activity.type === 'message') {
             removeTypingIndicator();
+            if (activity.text) addMessage(activity.text, 'ai');
             
-            if (activity.text) {
-                addMessage(activity.text, 'ai');
-            }
-            
-            // Renderizar Adaptive Cards
             if (activity.attachments && activity.attachments.length > 0) {
                 activity.attachments.forEach(attachment => {
                     if (attachment.contentType === 'application/vnd.microsoft.card.adaptive') {
@@ -476,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(copilotSecret ? { 'Authorization': `Bearer ${copilotSecret}` } : {})
+                    'Authorization': `Bearer ${copilotToken}`
                 },
                 body: JSON.stringify({
                     type: 'event',
@@ -491,15 +409,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAdaptiveCard(cardContent) {
         if (typeof AdaptiveCards === 'undefined') return;
-        
         const adaptiveCard = new AdaptiveCards.AdaptiveCard();
+        adaptiveCard.hostConfig = new AdaptiveCards.HostConfig({ fontFamily: "Inter, Roboto, sans-serif" });
         
-        // Host config básico
-        adaptiveCard.hostConfig = new AdaptiveCards.HostConfig({
-            fontFamily: "Inter, Roboto, sans-serif"
-        });
-        
-        // Permitir procesar markdown dentro de la tarjeta usando marked
         AdaptiveCards.AdaptiveCard.onProcessMarkdown = function (text, result) {
             if (typeof marked !== 'undefined') {
                 result.outputHtml = marked.parse(text);
@@ -544,28 +456,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(copilotToken ? { 'Authorization': `Bearer ${copilotToken}` } : {})
+                    'Authorization': `Bearer ${copilotToken}`
                 },
                 body: JSON.stringify({
                     type: 'message',
                     text: text,
-                    from: {
-                        id: 'user1',
-                        role: 'user'
-                    }
+                    from: { id: 'user1', role: 'user' }
                 })
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to send message');
-            }
+            if (!response.ok) throw new Error('Failed to send message');
         } catch (error) {
             console.error('Copilot send error:', error);
             removeTypingIndicator();
             addSystemMessage("Error al enviar mensaje al agente.");
         }
     }
-
-    // Conectar con el agente al cargar
-    initCopilotConversation();
 });
