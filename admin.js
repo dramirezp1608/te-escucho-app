@@ -34,7 +34,8 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
         const data = await res.json();
         
         if (!res.ok) {
-            throw new Error(data.error || "Error al iniciar sesión");
+            const errorMsg = data.details ? `${data.error}: ${data.details}` : (data.error || "Error al iniciar sesión");
+            throw new Error(errorMsg);
         }
         
         accessToken = data.token;
