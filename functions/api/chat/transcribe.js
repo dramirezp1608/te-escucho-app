@@ -11,7 +11,7 @@ export async function onRequestPost(context) {
             return new Response(JSON.stringify({ error: "GroqApiKey no configurada en el sistema." }), { status: 500 });
         }
 
-        const groqApiKey = groqApiObj.coem_valor;
+        const groqApiKey = groqApiObj.coem_valor.trim();
 
         // 2. Extraer el audio enviado y construir un nuevo FormData
         // Cloudflare Workers a veces falla si mutamos el formData original o lo reenviamos directamente
