@@ -42,16 +42,10 @@ export async function onRequestGet(context) {
         let chatData;
         
         if (copilotUrl.includes('powerplatform.com') || copilotUrl.includes('powervirtualagents')) {
-            // El SDK local funcionaba porque hace esto internamente: 
-            // Primero obtiene un token anónimo del endpoint de tokens, y luego hace POST a /conversations con ese token.
-            
-            const urlObj = new URL(copilotUrl);
-            const botNameMatch = copilotUrl.match(/\/bots\/([^\/]+)\//);
-            if (!botNameMatch) throw new Error("No se pudo extraer el nombre del bot de la URL proporcionada.");
-            const botName = botNameMatch[1];
+            // Reemplazar la parte de /conversations por /directline/token manteniendo la estructura exacta de la URL original
+            const tokenEndpoint = copilotUrl.replace('/conversations', '/directline/token');
             
             // 1. Obtener Token Anónimo
-            const tokenEndpoint = `${urlObj.origin}/powervirtualagents/bots/${botName}/directline/token?api-version=2022-03-01-preview`;
             const tokenRes = await fetch(tokenEndpoint, { method: 'GET' });
             
             if (!tokenRes.ok) {
@@ -62,7 +56,7 @@ export async function onRequestGet(context) {
             const anonymousToken = tokenData.token;
             
             // 2. Iniciar Conversación
-            const convUrl = copilotUrl.includes('/conversations') ? copilotUrl : `${urlObj.origin}/powervirtualagents/bots/${botName}/conversations?api-version=2022-03-01-preview`;
+            const convUrl = copilotUrl; // Usamos la original que tiene /conversations
             const chatResponse = await fetch(convUrl, {
                 method: 'POST',
                 headers: {
