@@ -75,11 +75,8 @@ export async function onRequestGet(context) {
             
         } else {
             // Es la URL de Bot Framework clásica (Direct Line con Secreto)
-            let tokenUrl = copilotUrl;
-            if (tokenUrl.endsWith('/conversations')) {
-                tokenUrl = tokenUrl.replace('/conversations', '/tokens/generate');
-            }
-            const chatResponse = await fetch(tokenUrl, {
+            // Hacemos POST directo a /conversations para que nos devuelva el streamUrl y un conversationId válido
+            const chatResponse = await fetch(copilotUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
