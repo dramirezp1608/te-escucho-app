@@ -239,14 +239,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
             formData.append('file', audioBlob, 'audio.webm');
 
-            // API key is hidden in the Cloudflare backend now
             const response = await fetch('/api/chat/transcribe', {
                 method: 'POST',
                 body: formData
             });
 
             if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `API Error: ${response.status}`);
             }
 
             const data = await response.json();

@@ -13,8 +13,13 @@ export async function onRequestPost(context) {
 
         const groqApiKey = groqApiObj.coem_valor;
 
-        // 2. Extraer el audio enviado desde el frontend
+        // 2. Extraer el audio enviado desde el frontend y añadir configuración
         const formData = await context.request.formData();
+        
+        // Groq exige que enviemos el modelo
+        if (!formData.has('model')) {
+            formData.append('model', 'whisper-large-v3');
+        }
         
         // 3. Reenviar a Groq de forma segura
         const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
