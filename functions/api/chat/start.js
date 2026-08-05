@@ -41,13 +41,23 @@ export async function onRequestGet(context) {
         // 3. Generar token de conversación
         let chatResponse;
         
-        if (copilotUrl.includes('powerplatform.com') || copilotUrl.includes('powervirtualagents') || copilotUrl.includes('token')) {
-            // Es un "Token Endpoint URL" nativo de Copilot Studio (Canal: Custom Website)
-            chatResponse = await fetch(copilotUrl, {
-                method: 'GET'
-            });
+        if (copilotUrl.includes('powerplatform.com') || copilotUrl.includes('powervirtualagents')) {
+            if (copilotUrl.includes('/conversations')) {
+                // Es la "Cadena de conexión" del SDK (Acepta POST anónimo, sin Authorization header)
+                chatResponse = await fetch(copilotUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+            } else {
+                // Es un "Token Endpoint URL" clásico (Solo GET)
+                chatResponse = await fetch(copilotUrl, {
+                    method: 'GET'
+                });
+            }
         } else {
-            // Es la URL de Bot Framework clásica (Direct Line)
+            // Es la URL de Bot Framework clásica (Direct Line con Secreto)
             let tokenUrl = copilotUrl;
             if (tokenUrl.endsWith('/conversations')) {
                 tokenUrl = tokenUrl.replace('/conversations', '/tokens/generate');
