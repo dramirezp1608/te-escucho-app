@@ -38,47 +38,69 @@ export async function onRequestGet(context) {
         const copilotSecret = copilotSecretObj.coem_valor;
         const copilotUrl = copilotUrlObj.coem_valor;
 
-        // 3. Generar token de conversación
-        let chatResponse;
+        // 3. Generar token y conversación
+        let chatData;
         
         if (copilotUrl.includes('powerplatform.com') || copilotUrl.includes('powervirtualagents')) {
-            if (copilotUrl.includes('/conversations')) {
-                // Es la "Cadena de conexión" del SDK (Acepta POST anónimo, sin Authorization header)
-                chatResponse = await fetch(copilotUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-            } else {
-                // Es un "Token Endpoint URL" clásico (Solo GET)
-                chatResponse = await fetch(copilotUrl, {
-                    method: 'GET'
-                });
+            // El SDK local funcionaba porque hace esto internamente: 
+            // Primero obtiene un token anónimo del endpoint de tokens, y luego hace POST a /conversations con ese token.
+            
+            const urlObj = new URL(copilotUrl);
+            const botNameMatch = copilotUrl.match(/\/bots\/([^\/]+)\//);
+            if (!botNameMatch) throw new Error("No se pudo extraer el nombre del bot de la URL proporcionada.");
+            const botName = botNameMatch[1];
+            
+            // 1. Obtener Token Anónimo
+            const tokenEndpoint = `${urlObj.origin}/powervirtualagents/bots/${botName}/directline/token?api-version=2022-03-01-preview`;
+            const tokenRes = await fetch(tokenEndpoint, { method: 'GET' });
+            
+            if (!tokenRes.ok) {
+                const err = await tokenRes.text();
+                throw new Error(`Error al solicitar token anónimo: ${err}`);
             }
+            const tokenData = await tokenRes.json();
+            const anonymousToken = tokenData.token;
+            
+            // 2. Iniciar Conversación
+            const convUrl = copilotUrl.includes('/conversations') ? copilotUrl : `${urlObj.origin}/powervirtualagents/bots/${botName}/conversations?api-version=2022-03-01-preview`;
+            const chatResponse = await fetch(convUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${anonymousToken}`
+                }
+            });
+            
+            if (!chatResponse.ok) {
+                const err = await chatResponse.text();
+                throw new Error(`Copilot Studio Error al iniciar chat (${chatResponse.status}): ${err}`);
+            }
+            
+            chatData = await chatResponse.json();
+            chatData.token = chatData.token || anonymousToken;
+            
         } else {
             // Es la URL de Bot Framework clásica (Direct Line con Secreto)
             let tokenUrl = copilotUrl;
             if (tokenUrl.endsWith('/conversations')) {
                 tokenUrl = tokenUrl.replace('/conversations', '/tokens/generate');
             }
-            chatResponse = await fetch(tokenUrl, {
+            const chatResponse = await fetch(tokenUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${copilotSecret.trim()}`
                 }
             });
+            
+            if (!chatResponse.ok) {
+                const errorText = await chatResponse.text();
+                throw new Error(`Copilot Studio Error Clásico (${chatResponse.status}): ${errorText}`);
+            }
+            chatData = await chatResponse.json();
         }
 
-        if (!chatResponse.ok) {
-            const errorText = await chatResponse.text();
-            throw new Error(`Copilot Studio Error (${chatResponse.status}): ${errorText}`);
-        }
-
-        const chatData = await chatResponse.json();
-
-        // Devolvemos el token temporal y el ID de conversación al frontend. NO EL SECRETO.
+        // Devolvemos los datos al frontend.
         return new Response(JSON.stringify({
             success: true,
             copilotToken: chatData.token,
