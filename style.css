@@ -528,3 +528,50 @@ body {
 .ac-textBlock {
     color: var(--text-primary) !important;
 }
+
+/* Mobile Responsiveness Improvements */
+@media (max-width: 768px) {
+    .chat-header {
+        padding: 12px 16px;
+    }
+    
+    .avatar {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .avatar.ai-avatar span {
+        font-size: 24px;
+    }
+    
+    .header-info h1 {
+        font-size: 1rem;
+    }
+    
+    .chat-box {
+        padding: 16px;
+        gap: 16px;
+    }
+    
+    .message-wrapper {
+        max-width: 90%;
+    }
+    
+    .message-bubble {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+    }
+    
+    .chat-footer {
+        padding: 12px 16px;
+    }
+    
+    .input-area {
+        padding: 4px 8px;
+    }
+    
+    .icon-btn {
+        width: 36px;
+        height: 36px;
+    }
+}
