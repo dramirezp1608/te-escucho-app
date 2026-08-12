@@ -3,6 +3,16 @@ let currentAdminEmail = sessionStorage.getItem("adminEmail") || "";
 
 // --- INICIALIZACIÓN ---
 document.addEventListener("DOMContentLoaded", async () => {
+    // Lógica para cerrar menú al hacer clic en un botón en móvil
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if(window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('open');
+                document.getElementById('sidebarOverlay').classList.remove('active');
+            }
+        });
+    });
+
     if (accessToken) {
         document.getElementById('userEmail').innerText = currentAdminEmail;
         document.getElementById('loginScreen').classList.remove('active');
@@ -10,6 +20,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadProjects();
     }
 });
+
+// --- MENÚ MÓVIL ---
+document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebarOverlay').classList.add('active');
+});
+document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('active');
+});
+
+// --- UI SPINNER ---
+function showSpinner() {
+    document.getElementById('globalSpinner').style.display = 'flex';
+}
+function hideSpinner() {
+    document.getElementById('globalSpinner').style.display = 'none';
+}
 
 // --- AUTENTICACIÓN ---
 document.getElementById('loginBtn').addEventListener('click', async () => {
@@ -87,22 +115,27 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 // --- API HELPER ---
 async function apiCall(endpoint, method = 'GET', body = null) {
-    const options = {
-        method,
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+    showSpinner();
+    try {
+        const options = {
+            method,
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        };
+        if (body) options.body = JSON.stringify(body);
+        
+        const res = await fetch(`/api/admin/${endpoint}`, options);
+        if (!res.ok) {
+            const text = await res.text();
+            alert(`Error: ${text}`);
+            throw new Error(text);
         }
-    };
-    if (body) options.body = JSON.stringify(body);
-    
-    const res = await fetch(`/api/admin/${endpoint}`, options);
-    if (!res.ok) {
-        const text = await res.text();
-        alert(`Error: ${text}`);
-        throw new Error(text);
+        return res.status === 204 ? null : await res.json();
+    } finally {
+        hideSpinner();
     }
-    return res.status === 204 ? null : await res.json();
 }
 
 // --- CRUD PROYECTOS ---
@@ -119,10 +152,10 @@ async function loadProjects() {
         
         tbody.innerHTML += `
             <tr>
-                <td>${p.coem_nombrecliente || 'Sin nombre'}</td>
-                <td>${start}</td>
-                <td>${end}</td>
-                <td class="actions">
+                <td data-label="Cliente">${p.coem_nombrecliente || 'Sin nombre'}</td>
+                <td data-label="Inicio">${start}</td>
+                <td data-label="Fin">${end}</td>
+                <td class="actions" data-label="Acciones">
                     <button class="btn-icon" onclick="showQR('${id}')" title="Generar QR"><span class="material-symbols-rounded">qr_code</span></button>
                     <button class="btn-icon" onclick="editProject('${id}')" title="Editar"><span class="material-symbols-rounded">edit</span></button>
                     <button class="btn-icon" onclick="deleteProject('${id}')" title="Eliminar"><span class="material-symbols-rounded">delete</span></button>
@@ -199,9 +232,9 @@ async function loadParams() {
         const id = p.coem_parametroglobalideacionid;
         tbody.innerHTML += `
             <tr>
-                <td>${p.coem_nombre}</td>
-                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.coem_valor || ''}</td>
-                <td class="actions">
+                <td data-label="Nombre">${p.coem_nombre}</td>
+                <td data-label="Valor" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.coem_valor || ''}</td>
+                <td class="actions" data-label="Acciones">
                     <button class="btn-icon" onclick="editParam('${id}')" title="Editar"><span class="material-symbols-rounded">edit</span></button>
                     <button class="btn-icon" onclick="deleteParam('${id}')" title="Eliminar"><span class="material-symbols-rounded">delete</span></button>
                 </td>
@@ -254,8 +287,8 @@ async function loadUsers() {
         const id = p.coem_administradorid;
         tbody.innerHTML += `
             <tr>
-                <td>${p.coem_correo}</td>
-                <td class="actions">
+                <td data-label="Correo (Entra ID)">${p.coem_correo}</td>
+                <td class="actions" data-label="Acciones">
                     <button class="btn-icon" onclick="deleteUser('${id}')" title="Eliminar"><span class="material-symbols-rounded">delete</span></button>
                 </td>
             </tr>

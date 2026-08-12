@@ -37,7 +37,16 @@
 
     <!-- Dashboard -->
     <div id="dashboardScreen" class="screen" style="display:none;">
-        <nav class="sidebar glass-panel">
+        <!-- Header móvil (Solo visible en pantallas pequeñas) -->
+        <div class="mobile-header">
+            <button id="mobileMenuBtn" class="btn-icon"><span class="material-symbols-rounded">menu</span></button>
+            <h3>Panel de Control</h3>
+        </div>
+        
+        <!-- Overlay del sidebar para móviles -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+        <nav class="sidebar glass-panel" id="sidebar">
             <div class="sidebar-header">
                 <h3>Admin Panel</h3>
                 <p id="userEmail" class="user-email"></p>
@@ -195,6 +204,11 @@
                 <button class="btn-primary" onclick="saveUser()">Guardar</button>
             </div>
         </div>
+    </div>
+
+    <!-- Spinner Global -->
+    <div id="globalSpinner" class="spinner-overlay" style="display:none;">
+        <div class="spinner"></div>
     </div>
 
     <script src="admin.js"></script>
