@@ -248,9 +248,26 @@ td .actions { display: flex; gap: 5px; }
     }
     .sidebar-footer button { width: 100%; }
     
+    .table-container {
+        border-radius: 0;
+        background: transparent !important;
+        border: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        padding: 0;
+    }
+    
+    th, td {
+        padding: 10px;
+        font-size: 14px;
+    }
+    
+    .login-card {
+        padding: 25px;
+    }
+    
     .content { padding: 15px; }
     .section-header { flex-direction: column; align-items: flex-start; gap: 15px; }
-    .login-card { padding: 25px; }
     
     /* Card Layout para Tablas en Móviles */
     .table-container table, 
@@ -265,9 +282,11 @@ td .actions { display: flex; gap: 5px; }
         position: absolute; top: -9999px; left: -9999px;
     }
     .table-container tr {
-        background: rgba(255,255,255,0.02);
+        background: var(--glass-bg);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border: 1px solid var(--glass-border);
-        border-radius: 8px;
+        border-radius: 12px;
         margin-bottom: 15px;
         padding: 10px;
     }
