@@ -4,9 +4,16 @@
     --glass-border: rgba(255, 255, 255, 0.1);
     --primary-color: #6366f1;
     --primary-hover: #4f46e5;
+    
+    /* Variables adicionales para personalización profunda */
+    --accent-color: #a855f7;
+    --primary-glow: rgba(99, 102, 241, 0.4);
+    --accent-glow: rgba(168, 85, 247, 0.4);
+    
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --user-msg-bg: #6366f1;
+    --user-msg-text: #ffffff;
     --ai-msg-bg: rgba(30, 41, 59, 0.8);
     --danger-color: #ef4444;
 }
@@ -21,8 +28,8 @@
 body {
     background: var(--bg-color);
     background-image: 
-        radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.15), transparent 25%),
-        radial-gradient(circle at 85% 30%, rgba(168, 85, 247, 0.15), transparent 25%);
+        radial-gradient(circle at 15% 50%, var(--primary-glow), transparent 25%),
+        radial-gradient(circle at 85% 30%, var(--accent-glow), transparent 25%);
     background-size: 150% 150%;
     animation: ambientBg 12s ease-in-out infinite alternate;
     color: var(--text-primary);
@@ -86,7 +93,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background: linear-gradient(135deg, #6366f1, #a855f7);
+    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
 }
 
 .avatar.ai-avatar span {
@@ -95,13 +102,13 @@ body {
 }
 
 .avatar.ai-avatar {
-    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+    box-shadow: 0 0 15px var(--accent-glow);
     animation: avatarPulse 3s infinite alternate ease-in-out;
 }
 
 @keyframes avatarPulse {
-    0% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.3); }
-    100% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.6); }
+    0% { box-shadow: 0 0 10px var(--accent-glow); }
+    100% { box-shadow: 0 0 25px var(--primary-glow); }
 }
 
 .status-indicator {
@@ -215,7 +222,7 @@ body {
 
 .user-message .message-bubble {
     background: var(--user-msg-bg);
-    color: white;
+    color: var(--user-msg-text);
     border-top-right-radius: 4px;
 }
 
@@ -275,9 +282,9 @@ body {
 }
 
 .input-area:focus-within {
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
-    border-color: rgba(99, 102, 241, 0.5);
-    background: rgba(15, 23, 42, 0.8);
+    box-shadow: 0 0 15px var(--primary-glow);
+    border-color: var(--primary-color);
+    background: var(--glass-bg);
 }
 
 .input-wrapper {
@@ -319,7 +326,7 @@ body {
 .send-btn {
     background: var(--primary-color);
     color: white;
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .send-btn:hover {
@@ -501,7 +508,7 @@ body {
     margin: 0;
 }
 .markdown-body a {
-    color: #a855f7;
+    color: var(--accent-color);
     text-decoration: underline;
 }
 .markdown-body ul, .markdown-body ol {
