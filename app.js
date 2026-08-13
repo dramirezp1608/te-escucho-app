@@ -74,6 +74,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 5. Iniciar la conexión WebSocket
             connectWebSocket(data.streamUrl);
+            
+            // 6. Actualizar el título con el nombre del proyecto
+            const headerNameEl = document.querySelector('.header-info h1');
+            if (headerNameEl && data.projectName) {
+                headerNameEl.innerText = `Cuentame AI - ${data.projectName}`;
+                document.title = `Cuentame AI - ${data.projectName}`;
+            }
 
         } catch (e) {
             showAccessDenied(e.message);
