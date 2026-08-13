@@ -57,7 +57,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chatApp) chatApp.style.display = 'flex';
             if (chatStatus) chatStatus.innerText = "En línea";
 
-            // Start WebSocket
+            // 4. Configurar variables CSS dinámicas (Colores Corporativos)
+            if (data.colors) {
+                try {
+                    const colors = JSON.parse(data.colors);
+                    const root = document.documentElement;
+                    // Aplicar cada llave del JSON a CSS
+                    // Ejemplo de llaves: "primary-color", "bg-color", "user-msg-bg"
+                    for (const [key, value] of Object.entries(colors)) {
+                        root.style.setProperty(`--${key}`, value);
+                    }
+                } catch (e) {
+                    console.error("Error al parsear el JSON de colores corporativos:", e);
+                }
+            }
+
+            // 5. Iniciar la conexión WebSocket
             connectWebSocket(data.streamUrl);
 
         } catch (e) {

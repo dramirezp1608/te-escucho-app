@@ -98,7 +98,8 @@ export async function onRequestGet(context) {
             conversationId: chatData.conversationId,
             streamUrl: chatData.streamUrl,
             endpoint: copilotUrl,
-            projectName: project.coem_nombrecliente
+            projectName: project.coem_nombrecliente,
+            colors: project.coem_colorescorporativos
         }), { 
             headers: { 'Content-Type': 'application/json' } 
         });

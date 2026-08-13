@@ -146,6 +146,14 @@
                 <label>Fecha Fin</label>
                 <input type="datetime-local" id="projectEnd">
             </div>
+            <div class="input-group">
+                <label>Colores Corporativos (JSON opcional)</label>
+                <textarea id="projectColors" placeholder='{
+  "primary-color": "#ff0000",
+  "primary-hover": "#cc0000",
+  "bg-color": "#000000"
+}'></textarea>
+            </div>
             <div class="modal-buttons">
                 <button class="btn-secondary" onclick="closeModal('projectModal')">Cancelar</button>
                 <button class="btn-primary" onclick="saveProject()">Guardar</button>

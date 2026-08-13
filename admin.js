@@ -171,7 +171,8 @@ function saveProject() {
         coem_nombrecliente: document.getElementById('projectClient').value,
         coem_descripcion: document.getElementById('projectDesc').value,
         coem_fechainicio: new Date(document.getElementById('projectStart').value).toISOString(),
-        coem_fechafin: new Date(document.getElementById('projectEnd').value).toISOString()
+        coem_fechafin: new Date(document.getElementById('projectEnd').value).toISOString(),
+        coem_colorescorporativos: document.getElementById('projectColors').value || null
     };
     
     const method = id ? 'PATCH' : 'POST';
@@ -193,6 +194,7 @@ async function editProject(id) {
     document.getElementById('projectDesc').value = p.coem_descripcion;
     document.getElementById('projectStart').value = p.coem_fechainicio.substring(0, 16);
     document.getElementById('projectEnd').value = p.coem_fechafin.substring(0, 16);
+    document.getElementById('projectColors').value = p.coem_colorescorporativos || '';
     document.getElementById('projectModalTitle').innerText = 'Editar Proyecto';
     openModal('projectModal');
 }
@@ -322,6 +324,7 @@ window.openModal = function(id) {
         document.getElementById('projectDesc').value = '';
         document.getElementById('projectStart').value = '';
         document.getElementById('projectEnd').value = '';
+        document.getElementById('projectColors').value = '';
     }
     if(id === 'paramModal' && document.getElementById('paramModalTitle').innerText === 'Nuevo Parámetro') {
         document.getElementById('paramId').value = '';
