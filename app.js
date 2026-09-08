@@ -197,17 +197,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 stream.getTracks().forEach(track => track.stop());
                 
-                if (audioChunks.length > 0 && isRecording) {
+                const shouldProcess = (audioChunks.length > 0 && isRecording);
+                resetRecordingUI();
+                
+                if (shouldProcess) {
                     await processAudio(audioBlob);
                 }
-                
-                resetRecordingUI();
             });
 
             mediaRecorder.start();
             isRecording = true;
             
             recordBtn.classList.add('recording');
+            const micIcon = recordBtn.querySelector('span');
+            if (micIcon) micIcon.innerText = 'stop';
+            
             recordingIndicator.classList.remove('hidden');
             recordingSeconds = 0;
             updateTimerDisplay();
@@ -246,6 +250,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isRecording = false;
         clearInterval(recordingInterval);
         recordBtn.classList.remove('recording');
+        const micIcon = recordBtn.querySelector('span');
+        if (micIcon) micIcon.innerText = 'mic';
         recordingIndicator.classList.add('hidden');
     }
 
