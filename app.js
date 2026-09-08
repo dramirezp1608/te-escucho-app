@@ -28,19 +28,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let copilotToken = '';
     let ws = null;
     let copilotUrl = '';
+    let currentProjectId = '';
 
     // Initialization & Validation
     async function initializeApp() {
         const urlParams = new URLSearchParams(window.location.search);
-        const projectId = urlParams.get('id');
+        currentProjectId = urlParams.get('id');
 
-        if (!projectId) {
+        if (!currentProjectId) {
             showAccessDenied("No se ha proporcionado un identificador de proyecto válido. Escanea el código QR oficial.");
             return;
         }
 
         try {
-            const res = await fetch(`/api/chat/start?id=${projectId}`);
+            const res = await fetch(`/api/chat/start?id=${currentProjectId}`);
             const data = await res.json();
 
             if (!res.ok) {
@@ -428,6 +429,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     type: 'event',
                     name: 'startConversation',
+                    value: {
+                        projectId: currentProjectId
+                    },
                     from: { id: 'user1', role: 'user' }
                 })
             });
