@@ -433,11 +433,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Authorization': `Bearer ${copilotToken}`
                 },
                 body: JSON.stringify({
-                    type: 'event',
-                    name: 'startConversation',
-                    value: {
-                        projectId: currentProjectId
-                    },
+                    type: 'message',
+                    text: `Hola. El project ID es: ${currentProjectId}`,
                     from: { id: 'user1', role: 'user' }
                 })
             });
