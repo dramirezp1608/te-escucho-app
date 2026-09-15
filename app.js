@@ -12,9 +12,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
     const recordBtn = document.getElementById('recordBtn');
+    const imageInput = document.getElementById('imageInput');
+    const attachBtn = document.getElementById('attachBtn');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const imagePreview = document.getElementById('imagePreview');
+    const removeImageBtn = document.getElementById('removeImageBtn');
     const cancelRecordBtn = document.getElementById('cancelRecordBtn');
     const recordingIndicator = document.getElementById('recordingIndicator');
     const recordingTimer = document.getElementById('recordingTimer');
+
+    // State
+    let currentAttachment = null;
+    let currentAttachmentType = null;
 
     // State
     let mediaRecorder = null;
@@ -109,14 +118,82 @@ document.addEventListener('DOMContentLoaded', () => {
     chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const text = messageInput.value.trim();
-        if (text) {
+        if (text || currentAttachment) {
             handleUserMessage(text);
         }
     });
 
-    messageInput.addEventListener('input', () => {
-        sendBtn.disabled = messageInput.value.trim().length === 0;
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+            if (text || currentAttachment) {
+                handleUserMessage(text);
+            }
+        }
     });
+
+    messageInput.addEventListener('input', () => {
+        sendBtn.disabled = (messageInput.value.trim().length === 0 && !currentAttachment);
+        // Auto-resize
+        messageInput.style.height = 'auto';
+        messageInput.style.height = (messageInput.scrollHeight) + 'px';
+    });
+
+    // Image Attachment Events
+    attachBtn.addEventListener('click', () => {
+        imageInput.click();
+    });
+
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            handleFileSelection(file);
+        }
+    });
+
+    messageInput.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const file = items[i].getAsFile();
+                handleFileSelection(file);
+                e.preventDefault();
+                break;
+            }
+        }
+    });
+
+    function handleFileSelection(file) {
+        if (!file.type.startsWith('image/')) {
+            alert('Solo se permiten imágenes.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            currentAttachment = e.target.result;
+            currentAttachmentType = file.type;
+            
+            imagePreview.src = currentAttachment;
+            imagePreviewContainer.classList.remove('hidden');
+            sendBtn.disabled = false;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    removeImageBtn.addEventListener('click', () => {
+        clearAttachment();
+    });
+
+    function clearAttachment() {
+        currentAttachment = null;
+        currentAttachmentType = null;
+        imageInput.value = '';
+        imagePreview.src = '';
+        imagePreviewContainer.classList.add('hidden');
+        sendBtn.disabled = messageInput.value.trim().length === 0;
+    }
 
     // Audio Recording Events
     let isTouchDevice = false;
@@ -301,13 +378,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Message Handling
     function handleUserMessage(text) {
-        addMessage(text, 'user');
+        addMessage(text, 'user', currentAttachment);
+        
+        const attachmentToSend = currentAttachment;
+        const attachmentTypeToSend = currentAttachmentType;
+        
         messageInput.value = '';
+        messageInput.style.height = 'auto';
+        clearAttachment();
         sendBtn.disabled = true;
-        sendToCopilot(text);
+        
+        sendToCopilot(text, attachmentToSend, attachmentTypeToSend);
     }
 
-    function addMessage(text, sender) {
+    function addMessage(text, sender, attachmentData = null) {
         const wrapper = document.createElement('div');
         wrapper.className = `message-wrapper ${sender === 'user' ? 'user-message' : 'ai-message'}`;
 
@@ -318,6 +402,13 @@ document.addEventListener('DOMContentLoaded', () => {
             bubble.innerHTML = marked.parse(text);
         } else {
             bubble.textContent = text;
+        }
+
+        if (attachmentData) {
+            const img = document.createElement('img');
+            img.src = attachmentData;
+            img.className = 'message-image';
+            bubble.appendChild(img);
         }
 
         const time = document.createElement('span');
@@ -478,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function sendToCopilot(text) {
+    async function sendToCopilot(text, attachmentBase64 = null, attachmentType = null) {
         if (!copilotConversationId) {
             addSystemMessage("La conexión con el agente aún no está lista.");
             return;
@@ -487,6 +578,19 @@ document.addEventListener('DOMContentLoaded', () => {
         showTypingIndicator();
         const activitiesUrl = `${copilotUrl}/${copilotConversationId}/activities`;
 
+        const payload = {
+            type: 'message',
+            text: text,
+            from: { id: 'user1', role: 'user' }
+        };
+
+        if (attachmentBase64 && attachmentType) {
+            payload.attachments = [{
+                contentType: attachmentType,
+                contentUrl: attachmentBase64
+            }];
+        }
+
         try {
             const response = await fetch(activitiesUrl, {
                 method: 'POST',
@@ -494,11 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${copilotToken}`
                 },
-                body: JSON.stringify({
-                    type: 'message',
-                    text: text,
-                    from: { id: 'user1', role: 'user' }
-                })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) throw new Error('Failed to send message');

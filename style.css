@@ -295,10 +295,56 @@ body {
     width: 100%;
     background: transparent;
     border: none;
+    outline: none;
     color: var(--text-primary);
     font-size: 1rem;
     padding: 10px 0;
-    outline: none;
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.5;
+    max-height: 120px;
+    display: block;
+    font-family: inherit;
+}
+
+#imagePreviewContainer {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 8px;
+    margin-top: 8px;
+}
+
+#imagePreviewContainer.hidden {
+    display: none;
+}
+
+#imagePreview {
+    max-height: 80px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+}
+
+#removeImageBtn {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 24px;
+    height: 24px;
+    background: var(--danger-color);
+    color: white;
+    padding: 0;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+#removeImageBtn span {
+    font-size: 16px;
+}
+
+.message-image {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-top: 8px;
+    display: block;
 }
 
 #messageInput::placeholder {

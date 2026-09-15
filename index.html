@@ -85,13 +85,27 @@
             </div>
             
             <form id="chatForm" class="input-area">
+                <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                
+                <button type="button" id="attachBtn" class="icon-btn" title="Adjuntar imagen">
+                    <span class="material-symbols-rounded">attach_file</span>
+                </button>
+                
                 <button type="button" id="recordBtn" class="icon-btn mic-btn" title="Grabar audio">
                     <span class="material-symbols-rounded">mic</span>
                 </button>
+                
                 <div class="input-wrapper">
-                    <input type="text" id="messageInput" placeholder="Escribe un mensaje..." autocomplete="off">
+                    <div id="imagePreviewContainer" class="hidden">
+                        <img id="imagePreview" src="" alt="Preview">
+                        <button type="button" id="removeImageBtn" class="icon-btn danger">
+                            <span class="material-symbols-rounded">close</span>
+                        </button>
+                    </div>
+                    <textarea id="messageInput" rows="1" placeholder="Escribe un mensaje..." autocomplete="off"></textarea>
                 </div>
-                <button type="submit" id="sendBtn" class="icon-btn send-btn" title="Enviar">
+                
+                <button type="submit" id="sendBtn" class="icon-btn send-btn" title="Enviar" disabled>
                     <span class="material-symbols-rounded">send</span>
                 </button>
             </form>
