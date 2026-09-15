@@ -606,31 +606,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         showTypingIndicator();
-        const activitiesUrl = `${copilotUrl}/${copilotConversationId}/activities`;
-
+        
         const payload = {
             type: 'message',
             text: text,
             from: { id: 'user1', role: 'user' }
         };
 
-        if (attachmentBase64 && attachmentType) {
-            payload.attachments = [{
-                contentType: attachmentType,
-                contentUrl: attachmentBase64,
-                name: "uploaded_image.jpg"
-            }];
-        }
-
         try {
-            const response = await fetch(activitiesUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${copilotToken}`
-                },
-                body: JSON.stringify(payload)
-            });
+            let response;
+            
+            if (attachmentBase64 && attachmentType) {
+                // Para evitar SystemError en Copilot Studio, las imágenes deben enviarse vía el endpoint /upload
+                // usando multipart/form-data.
+                const uploadUrl = `${copilotUrl}/${copilotConversationId}/upload?userId=user1`;
+                
+                const formData = new FormData();
+                
+                // 1. Agregar el activity (JSON) como un Blob
+                const activityBlob = new Blob([JSON.stringify(payload)], { type: 'application/vnd.microsoft.activity' });
+                formData.append('activity', activityBlob, 'activity.json');
+                
+                // 2. Convertir el Base64 a Blob y agregarlo
+                const byteString = atob(attachmentBase64.split(',')[1]);
+                const mimeString = attachmentBase64.split(',')[0].split(':')[1].split(';')[0];
+                const ab = new ArrayBuffer(byteString.length);
+                const ia = new Uint8Array(ab);
+                for (let i = 0; i < byteString.length; i++) {
+                    ia[i] = byteString.charCodeAt(i);
+                }
+                const imageBlob = new Blob([ab], { type: mimeString });
+                formData.append('file', imageBlob, 'image.jpg');
+
+                response = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${copilotToken}`
+                        // No setear Content-Type, fetch lo hará automáticamente con el boundary para FormData
+                    },
+                    body: formData
+                });
+            } else {
+                // Envío normal de solo texto
+                const activitiesUrl = `${copilotUrl}/${copilotConversationId}/activities`;
+                response = await fetch(activitiesUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${copilotToken}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+            }
 
             if (!response.ok) throw new Error('Failed to send message');
         } catch (error) {
