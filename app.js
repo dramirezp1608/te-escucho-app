@@ -20,8 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelRecordBtn = document.getElementById('cancelRecordBtn');
     const recordingIndicator = document.getElementById('recordingIndicator');
     const recordingTimer = document.getElementById('recordingTimer');
+    
+    // User Form DOM
+    const userFormModal = document.getElementById('userFormModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const userAreaInput = document.getElementById('userAreaInput');
+    const startSessionBtn = document.getElementById('startSessionBtn');
 
     // State
+    let userName = '';
+    let userArea = '';
     let currentAttachment = null;
     let currentAttachmentType = null;
 
@@ -37,7 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let copilotToken = '';
     let ws = null;
     let copilotUrl = '';
-    let currentProjectId = '';
+    let copilotStreamUrl = '';
+    let currentProjectId = null;
 
     // Initialization & Validation
     async function initializeApp() {
@@ -82,8 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // 5. Iniciar la conexión WebSocket
-            connectWebSocket(data.streamUrl);
+            // 5. Mostrar formulario de usuario
+            copilotStreamUrl = data.streamUrl;
+            checkUserCookieAndShowForm();
             
             // 6. Actualizar el título con el nombre del proyecto
             const headerNameEl = document.querySelector('.header-info h1');
@@ -104,6 +114,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (authMessage) authMessage.innerText = msg;
     }
+
+    // --- User Form & Cookies ---
+    function setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+    }
+
+    function getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for(let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+        }
+        return null;
+    }
+
+    function checkUserCookieAndShowForm() {
+        const cookieData = getCookie('cuentame_user_info');
+        if (cookieData) {
+            try {
+                const parsed = JSON.parse(cookieData);
+                if (parsed.userName) userNameInput.value = parsed.userName;
+                if (parsed.userArea) userAreaInput.value = parsed.userArea;
+            } catch (e) {
+                console.error("Error parsing user cookie", e);
+            }
+        }
+        userFormModal.classList.add('active');
+    }
+
+    startSessionBtn.addEventListener('click', () => {
+        const name = userNameInput.value.trim();
+        const area = userAreaInput.value.trim();
+
+        if (!name || !area) {
+            alert("Por favor, completa tu nombre y área para continuar.");
+            return;
+        }
+
+        userName = name;
+        userArea = area;
+
+        const userInfo = {
+            projectId: currentProjectId,
+            userName: name,
+            userArea: area
+        };
+
+        setCookie('cuentame_user_info', JSON.stringify(userInfo), 30);
+        
+        userFormModal.classList.remove('active');
+        connectWebSocket(copilotStreamUrl);
+    });
+
 
     // Call init
     initializeApp();
@@ -555,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({
                     type: 'message',
-                    text: `Hola. El project ID es: ${currentProjectId}`,
+                    text: `Hola. El project ID es: ${currentProjectId}. Mi nombre es ${userName} y pertenezco al área de ${userArea}.`,
                     from: { id: 'user1', role: 'user' }
                 })
             });

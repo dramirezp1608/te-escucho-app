@@ -31,15 +31,15 @@
                 <p>Ingresa tu API Key de Groq para habilitar el reconocimiento de voz con Whisper. Esta clave solo se guardará localmente en tu navegador.</p>
                 <div class="input-group">
                     <label for="apiKeyInput">Groq API Key (Whisper)</label>
-                    <input type="password" id="apiKeyInput" placeholder="gsk_...">
+                    <input type="password" id="apiKeyInput" class="modal-input" placeholder="gsk_...">
                 </div>
                 <div class="input-group">
                     <label for="copilotUrlInput">URL de Conexión (Endpoint)</label>
-                    <input type="text" id="copilotUrlInput" placeholder="https://directline.botframework.com/v3/directline/conversations">
+                    <input type="text" id="copilotUrlInput" class="modal-input" placeholder="https://directline.botframework.com/v3/directline/conversations">
                 </div>
                 <div class="input-group">
                     <label for="copilotSecretInput">Copilot Direct Line Secret</label>
-                    <input type="password" id="copilotSecretInput" placeholder="Ingresa tu secreto o token de Copilot">
+                    <input type="password" id="copilotSecretInput" class="modal-input" placeholder="Ingresa tu secreto o token de Copilot">
                 </div>
                 <div class="modal-buttons">
                     <button id="saveApiKeyBtn" class="btn-primary">Guardar</button>
@@ -110,6 +110,18 @@
                 </button>
             </form>
         </footer>
+    </div>
+    <!-- User Form Modal -->
+    <div class="modal-overlay" id="userFormModal">
+        <div class="modal-content glass-panel">
+            <h2>Bienvenido</h2>
+            <p>Por favor, indícanos tus datos para iniciar la conversación.</p>
+            <div class="input-group">
+                <input type="text" id="userNameInput" class="modal-input" placeholder="Nombre completo" required>
+                <input type="text" id="userAreaInput" class="modal-input" placeholder="Área (Ej. RRHH, Legal)" required>
+            </div>
+            <button type="button" id="startSessionBtn" class="btn-primary" style="width: 100%; margin-top: 8px;">Iniciar chat</button>
+        </div>
     </div>
 
     <!-- Librerías para renderizar Markdown y Adaptive Cards -->
