@@ -140,11 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
         startSessionBtn.disabled = true;
 
         const result = await backendInitPromise;
-
-        startSessionBtn.innerText = originalText;
-        startSessionBtn.disabled = false;
         
         if (!result || !result.ok) {
+            startSessionBtn.innerText = originalText;
+            startSessionBtn.disabled = false;
             userFormModal.classList.remove('active');
             showAccessDenied(result?.error || 'Error de conexión');
             return;
@@ -637,8 +636,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let hasGreeted = false;
     async function triggerCopilotGreeting() {
-        if (!copilotConversationId) return;
+        if (!copilotConversationId || hasGreeted) return;
+        hasGreeted = true;
         const activitiesUrl = `${copilotUrl}/${copilotConversationId}/activities`;
         try {
             await fetch(activitiesUrl, {
