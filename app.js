@@ -48,8 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let copilotStreamUrl = '';
     let currentProjectId = null;
 
+    let backendInitPromise = null;
+
     // Initialization & Validation
-    async function initializeApp() {
+    function initializeApp() {
         const urlParams = new URLSearchParams(window.location.search);
         currentProjectId = urlParams.get('id');
 
@@ -58,6 +60,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 1. Mostrar formulario de usuario inmediatamente para no bloquear la pantalla
+        checkUserCookieAndShowForm();
+
+        // 2. Iniciar la carga del backend en paralelo
+        backendInitPromise = initBackend();
+    }
+
+    async function initBackend() {
         try {
             const res = await fetch(`/api/chat/start?id=${currentProjectId}`);
             const data = await res.json();
@@ -66,44 +76,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || 'Error de validación de proyecto.');
             }
 
-            // Secure connection established via backend
-            copilotToken = data.copilotToken;
-            copilotConversationId = data.conversationId;
-            copilotUrl = data.endpoint;
-
-            // Update UI
-            if (authScreen) authScreen.style.display = 'none';
-            if (chatApp) chatApp.style.display = 'flex';
-            if (chatStatus) chatStatus.innerText = "En línea";
-
-            // 4. Configurar variables CSS dinámicas (Colores Corporativos)
-            if (data.colors) {
-                try {
-                    const colors = JSON.parse(data.colors);
-                    const root = document.documentElement;
-                    // Aplicar cada llave del JSON a CSS
-                    // Ejemplo de llaves: "primary-color", "bg-color", "user-msg-bg"
-                    for (const [key, value] of Object.entries(colors)) {
-                        root.style.setProperty(`--${key}`, value);
-                    }
-                } catch (e) {
-                    console.error("Error al parsear el JSON de colores corporativos:", e);
-                }
-            }
-
-            // 5. Mostrar formulario de usuario
-            copilotStreamUrl = data.streamUrl;
-            checkUserCookieAndShowForm();
-            
-            // 6. Actualizar el título con el nombre del proyecto
-            const headerNameEl = document.querySelector('.header-info h1');
-            if (headerNameEl && data.projectName) {
-                headerNameEl.innerText = `Cuentame AI - ${data.projectName}`;
-                document.title = `Cuentame AI - ${data.projectName}`;
-            }
-
+            return { ok: true, data };
         } catch (e) {
-            showAccessDenied(e.message);
+            return { ok: false, error: e.message };
         }
     }
 
@@ -151,13 +126,61 @@ document.addEventListener('DOMContentLoaded', () => {
         userFormModal.classList.add('active');
     }
 
-    startSessionBtn.addEventListener('click', () => {
+    startSessionBtn.addEventListener('click', async () => {
         const name = userNameInput.value.trim();
         const area = userAreaInput.value.trim();
 
         if (!name || !area) {
             alert("Por favor, completa tu nombre y área para continuar.");
             return;
+        }
+
+        const originalText = startSessionBtn.innerText;
+        startSessionBtn.innerText = "Conectando...";
+        startSessionBtn.disabled = true;
+
+        const result = await backendInitPromise;
+
+        startSessionBtn.innerText = originalText;
+        startSessionBtn.disabled = false;
+        
+        if (!result || !result.ok) {
+            userFormModal.classList.remove('active');
+            showAccessDenied(result?.error || 'Error de conexión');
+            return;
+        }
+
+        const data = result.data;
+        
+        // Asignar variables globales
+        copilotToken = data.copilotToken;
+        copilotConversationId = data.conversationId;
+        copilotUrl = data.endpoint;
+        copilotStreamUrl = data.streamUrl;
+
+        // Mostrar UI principal
+        if (authScreen) authScreen.style.display = 'none';
+        if (chatApp) chatApp.style.display = 'flex';
+        if (chatStatus) chatStatus.innerText = "En línea";
+
+        // Configurar CSS dinámico
+        if (data.colors) {
+            try {
+                const colors = JSON.parse(data.colors);
+                const root = document.documentElement;
+                for (const [key, value] of Object.entries(colors)) {
+                    root.style.setProperty(`--${key}`, value);
+                }
+            } catch (e) {
+                console.error("Error al parsear el JSON de colores corporativos:", e);
+            }
+        }
+
+        // Actualizar header
+        const headerNameEl = document.querySelector('.header-info h1');
+        if (headerNameEl && data.projectName) {
+            headerNameEl.innerText = `Cuentame AI - ${data.projectName}`;
+            document.title = `Cuentame AI - ${data.projectName}`;
         }
 
         userName = name;
