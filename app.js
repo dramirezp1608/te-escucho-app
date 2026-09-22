@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let userArea = '';
     let currentAttachment = null;
     let currentAttachmentType = null;
+    let wakeLock = null;
 
     // State
     let mediaRecorder = null;
@@ -383,6 +384,37 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelRecording();
     });
 
+    // --- Screen Wake Lock API ---
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log('Screen Wake Lock adquirido');
+                
+                wakeLock.addEventListener('release', () => {
+                    console.log('Screen Wake Lock liberado de forma externa');
+                });
+            } catch (err) {
+                console.error(`Wake Lock request failed: ${err.name}, ${err.message}`);
+            }
+        }
+    }
+
+    function releaseWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release().then(() => {
+                wakeLock = null;
+                console.log('Screen Wake Lock liberado');
+            });
+        }
+    }
+
+    document.addEventListener('visibilitychange', async () => {
+        if (wakeLock !== null && document.visibilityState === 'visible' && isRecording) {
+            requestWakeLock();
+        }
+    });
+
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -407,6 +439,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             mediaRecorder.start();
             isRecording = true;
+            
+            // Adquirir bloqueo de pantalla (Wake Lock)
+            requestWakeLock();
             
             recordBtn.classList.add('recording');
             const micIcon = recordBtn.querySelector('span');
@@ -453,6 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const micIcon = recordBtn.querySelector('span');
         if (micIcon) micIcon.innerText = 'mic';
         recordingIndicator.classList.add('hidden');
+        
+        // Liberar bloqueo de pantalla
+        releaseWakeLock();
     }
 
     function updateTimerDisplay() {
