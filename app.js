@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let userArea = '';
     let currentAttachment = null;
     let currentAttachmentType = null;
+    let currentFile = null;
     let wakeLock = null;
 
     // State
@@ -249,61 +250,87 @@ document.addEventListener('DOMContentLoaded', () => {
     messageInput.addEventListener('paste', (e) => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
+            if (items[i].kind === 'file') {
                 const file = items[i].getAsFile();
-                handleFileSelection(file);
-                e.preventDefault();
-                break;
+                if (file) {
+                    handleFileSelection(file);
+                    e.preventDefault();
+                    break;
+                }
             }
         }
     });
 
     function handleFileSelection(file) {
-        if (!file.type.startsWith('image/')) {
-            alert('Solo se permiten imágenes.');
-            return;
+        currentFile = file;
+        currentAttachmentType = file.type || 'application/octet-stream';
+        
+        // Find or create a generic file preview element
+        let fileNameEl = document.getElementById('fileNamePreview');
+        if (!fileNameEl) {
+            fileNameEl = document.createElement('span');
+            fileNameEl.id = 'fileNamePreview';
+            fileNameEl.style.color = 'var(--text-primary)';
+            fileNameEl.style.fontSize = '0.9rem';
+            fileNameEl.style.padding = '8px';
+            fileNameEl.style.display = 'none';
+            fileNameEl.style.background = 'rgba(255,255,255,0.1)';
+            fileNameEl.style.borderRadius = '8px';
+            fileNameEl.style.marginBottom = '8px';
+            imagePreviewContainer.insertBefore(fileNameEl, imagePreview);
         }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                
-                const MAX_WIDTH = 800;
-                const MAX_HEIGHT = 800;
-                
-                if (width > height) {
-                    if (width > MAX_WIDTH) {
-                        height *= MAX_WIDTH / width;
-                        width = MAX_WIDTH;
+        if (file.type.startsWith('image/')) {
+            fileNameEl.style.display = 'none';
+            imagePreview.style.display = 'block';
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    const MAX_WIDTH = 800;
+                    const MAX_HEIGHT = 800;
+                    
+                    if (width > height) {
+                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                    } else {
+                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
                     }
-                } else {
-                    if (height > MAX_HEIGHT) {
-                        width *= MAX_HEIGHT / height;
-                        height = MAX_HEIGHT;
-                    }
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                
-                currentAttachment = dataUrl;
-                currentAttachmentType = 'image/jpeg';
-                
-                imagePreview.src = currentAttachment;
-                imagePreviewContainer.classList.remove('hidden');
-                sendBtn.disabled = false;
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    canvas.toBlob((blob) => {
+                        currentFile = blob;
+                        currentFile.name = file.name;
+                        currentAttachment = canvas.toDataURL('image/jpeg', 0.6);
+                        
+                        imagePreview.src = currentAttachment;
+                        imagePreviewContainer.classList.remove('hidden');
+                        sendBtn.disabled = false;
+                    }, 'image/jpeg', 0.6);
+                };
+                img.src = e.target.result;
             };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
+            reader.readAsDataURL(file);
+        } else {
+            // Documento genérico
+            currentAttachment = null;
+            imagePreview.style.display = 'none';
+            imagePreview.src = '';
+            
+            fileNameEl.textContent = `📄 ${file.name}`;
+            fileNameEl.style.display = 'inline-block';
+            
+            imagePreviewContainer.classList.remove('hidden');
+            sendBtn.disabled = false;
+        }
     }
 
     removeImageBtn.addEventListener('click', () => {
@@ -311,10 +338,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function clearAttachment() {
+        currentFile = null;
         currentAttachment = null;
         currentAttachmentType = null;
         imageInput.value = '';
         imagePreview.src = '';
+        imagePreview.style.display = 'block';
+        
+        const fileNameEl = document.getElementById('fileNamePreview');
+        if (fileNameEl) fileNameEl.style.display = 'none';
+        
         imagePreviewContainer.classList.add('hidden');
         sendBtn.disabled = messageInput.value.trim().length === 0;
     }
@@ -539,20 +572,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Message Handling
     function handleUserMessage(text) {
-        addMessage(text, 'user', currentAttachment);
+        const fileName = currentFile ? (currentFile.name || 'documento') : null;
+        addMessage(text, 'user', currentAttachment, fileName);
         
-        const attachmentToSend = currentAttachment;
-        const attachmentTypeToSend = currentAttachmentType;
+        const fileToSend = currentFile;
+        const fileType = currentAttachmentType;
         
         messageInput.value = '';
         messageInput.style.height = 'auto';
         clearAttachment();
         sendBtn.disabled = true;
         
-        sendToCopilot(text, attachmentToSend, attachmentTypeToSend);
+        sendToCopilot(text, fileToSend, fileType, fileName);
     }
 
-    function addMessage(text, sender, attachmentData = null) {
+    function addMessage(text, sender, attachmentData = null, fileName = null) {
         const wrapper = document.createElement('div');
         wrapper.className = `message-wrapper ${sender === 'user' ? 'user-message' : 'ai-message'}`;
 
@@ -570,6 +604,15 @@ document.addEventListener('DOMContentLoaded', () => {
             img.src = attachmentData;
             img.className = 'message-image';
             bubble.appendChild(img);
+        } else if (fileName) {
+            const fileEl = document.createElement('div');
+            fileEl.textContent = `📄 ${fileName}`;
+            fileEl.style.marginTop = '8px';
+            fileEl.style.padding = '8px';
+            fileEl.style.background = 'rgba(255,255,255,0.1)';
+            fileEl.style.borderRadius = '8px';
+            fileEl.style.fontSize = '0.85rem';
+            bubble.appendChild(fileEl);
         }
 
         const time = document.createElement('span');
@@ -732,7 +775,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function sendToCopilot(text, attachmentBase64 = null, attachmentType = null) {
+    async function sendToCopilot(text, fileObject = null, fileType = null, fileName = 'archivo') {
         if (!copilotConversationId) {
             addSystemMessage("La conexión con el agente aún no está lista.");
             return;
@@ -749,9 +792,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             let response;
             
-            if (attachmentBase64 && attachmentType) {
-                // Para evitar SystemError en Copilot Studio, las imágenes deben enviarse vía el endpoint /upload
-                // usando multipart/form-data.
+            if (fileObject) {
+                // Envío de cualquier tipo de archivo a través de /upload (multipart)
                 const uploadUrl = `${copilotUrl}/${copilotConversationId}/upload?userId=user1`;
                 
                 const formData = new FormData();
@@ -760,22 +802,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const activityBlob = new Blob([JSON.stringify(payload)], { type: 'application/vnd.microsoft.activity' });
                 formData.append('activity', activityBlob, 'activity.json');
                 
-                // 2. Convertir el Base64 a Blob y agregarlo
-                const byteString = atob(attachmentBase64.split(',')[1]);
-                const mimeString = attachmentBase64.split(',')[0].split(':')[1].split(';')[0];
-                const ab = new ArrayBuffer(byteString.length);
-                const ia = new Uint8Array(ab);
-                for (let i = 0; i < byteString.length; i++) {
-                    ia[i] = byteString.charCodeAt(i);
-                }
-                const imageBlob = new Blob([ab], { type: mimeString });
-                formData.append('file', imageBlob, 'image.jpg');
+                // 2. Agregar el archivo real directamente
+                formData.append('file', fileObject, fileName);
 
                 response = await fetch(uploadUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${copilotToken}`
-                        // No setear Content-Type, fetch lo hará automáticamente con el boundary para FormData
                     },
                     body: formData
                 });
