@@ -156,6 +156,7 @@ body {
     justify-content: center;
     align-items: center;
     transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .icon-btn:hover {
@@ -273,12 +274,14 @@ body {
 .input-area {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     background: rgba(15, 23, 42, 0.6);
     border: 1px solid var(--glass-border);
     border-radius: 24px;
-    padding: 6px 12px;
+    padding: 6px 10px;
     transition: all 0.3s ease;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .input-area:focus-within {
@@ -288,7 +291,8 @@ body {
 }
 
 .input-wrapper {
-    flex-grow: 1;
+    flex: 1;
+    min-width: 0;
 }
 
 #messageInput {
@@ -298,53 +302,151 @@ body {
     outline: none;
     color: var(--text-primary);
     font-size: 1rem;
-    padding: 10px 0;
+    padding: 8px 4px;
     resize: none;
     overflow-y: hidden;
-    line-height: 1.5;
+    line-height: 1.4;
     max-height: 120px;
     display: block;
     font-family: inherit;
+    box-sizing: border-box;
 }
 
-#imagePreviewContainer {
-    position: relative;
-    display: inline-block;
-    margin-bottom: 8px;
-    margin-top: 8px;
+/* Attachments preview container placed above the input bar */
+.attachments-preview-container {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 2px 4px 10px 4px;
+    margin-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
 }
 
-#imagePreviewContainer.hidden {
+.attachments-preview-container.hidden {
     display: none;
 }
 
-#imagePreview {
-    max-height: 80px;
-    border-radius: 8px;
+.attachments-preview-container::-webkit-scrollbar {
+    height: 4px;
+}
+
+.attachments-preview-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(30, 41, 59, 0.8);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 4px 8px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    max-width: 220px;
+    transition: all 0.2s ease;
+    animation: fadeInChip 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInChip {
+    from { opacity: 0; transform: translateY(4px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.attachment-chip .chip-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
     border: 1px solid var(--glass-border);
 }
 
-#removeImageBtn {
-    position: absolute;
-    top: -10px;
-    right: -10px;
-    width: 24px;
-    height: 24px;
-    background: var(--danger-color);
-    color: white;
-    padding: 0;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+.attachment-chip .chip-icon {
+    font-size: 20px;
+    color: var(--primary-color);
+    flex-shrink: 0;
 }
 
-#removeImageBtn span {
+.attachment-chip .chip-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+}
+
+.attachment-chip .chip-remove-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.attachment-chip .chip-remove-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger-color);
+}
+
+.attachment-chip .chip-remove-btn .material-symbols-rounded {
     font-size: 16px;
+}
+
+/* Chat bubble attachments */
+.message-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
 }
 
 .message-image {
     max-width: 100%;
-    border-radius: 8px;
-    margin-top: 8px;
+    max-height: 220px;
+    border-radius: 10px;
+    object-fit: cover;
     display: block;
+}
+
+.message-file-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.message-file-badge .material-symbols-rounded {
+    font-size: 18px;
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.message-file-badge .file-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
 }
 
 #messageInput::placeholder {

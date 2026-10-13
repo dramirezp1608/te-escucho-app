@@ -84,10 +84,13 @@
                 </button>
             </div>
             
+            <!-- Previsualización de archivos adjuntos (listados en la parte de arriba) -->
+            <div id="attachmentsPreviewContainer" class="attachments-preview-container hidden"></div>
+            
             <form id="chatForm" class="input-area">
-                <input type="file" id="imageInput" style="display: none;">
+                <input type="file" id="imageInput" multiple style="display: none;">
                 
-                <button type="button" id="attachBtn" class="icon-btn" title="Adjuntar imagen">
+                <button type="button" id="attachBtn" class="icon-btn" title="Adjuntar archivos">
                     <span class="material-symbols-rounded">attach_file</span>
                 </button>
                 
@@ -96,12 +99,6 @@
                 </button>
                 
                 <div class="input-wrapper">
-                    <div id="imagePreviewContainer" class="hidden">
-                        <img id="imagePreview" src="" alt="Preview">
-                        <button type="button" id="removeImageBtn" class="icon-btn danger">
-                            <span class="material-symbols-rounded">close</span>
-                        </button>
-                    </div>
                     <textarea id="messageInput" rows="1" placeholder="Escribe un mensaje..." autocomplete="off"></textarea>
                 </div>
                 
