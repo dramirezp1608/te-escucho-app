@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
                 if (navigator.onLine && copilotStreamUrl) {
                     console.log('[Heartbeat] WebSocket inactivo detectado. Reconectando...');
-                    connectWebSocket(copilotStreamUrl);
+                    connectWebSocket(copilotStreamUrl, true);
                 }
             } else if (ws.readyState === WebSocket.OPEN) {
                 if (navigator.onLine && chatStatus && chatStatus.innerText !== "En línea") {
@@ -119,27 +119,32 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
 
+    let isFlushingQueue = false;
     async function flushPendingQueue() {
-        if (pendingQueue.length === 0 || !navigator.onLine) return;
-        console.log(`[Cola de Envíos] Procesando ${pendingQueue.length} elemento(s) pendiente(s)...`);
+        if (isFlushingQueue || pendingQueue.length === 0 || !navigator.onLine) return;
+        isFlushingQueue = true;
         
-        const itemsToProcess = [...pendingQueue];
-        pendingQueue = [];
-
-        for (const item of itemsToProcess) {
-            if (item.wrapper) {
-                item.wrapper.classList.remove('is-queued');
-                const badge = item.wrapper.querySelector('.message-queued-badge');
-                if (badge) badge.remove();
-            }
-
-            if (item.type === 'chat') {
-                handleUserMessage(item.text, item.files, item.wrapper);
-            } else if (item.type === 'audio') {
-                processAudio(item.audioBlob, item.wrapper);
-            }
+        try {
+            console.log(`[Cola de Envíos] Procesando ${pendingQueue.length} elemento(s) pendiente(s)...`);
             
-            await new Promise(r => setTimeout(r, 600));
+            while (pendingQueue.length > 0 && navigator.onLine) {
+                const item = pendingQueue.shift();
+                if (item.wrapper) {
+                    item.wrapper.classList.remove('is-queued');
+                    const badge = item.wrapper.querySelector('.message-queued-badge');
+                    if (badge) badge.remove();
+                }
+
+                if (item.type === 'chat') {
+                    handleUserMessage(item.text, item.files, item.wrapper);
+                } else if (item.type === 'audio') {
+                    processAudio(item.audioBlob, item.wrapper);
+                }
+                
+                await new Promise(r => setTimeout(r, 600));
+            }
+        } finally {
+            isFlushingQueue = false;
         }
     }
 
@@ -301,6 +306,10 @@ document.addEventListener('DOMContentLoaded', () => {
     resetBtn.addEventListener('click', () => {
         // En lugar de limpiar, recargamos la página para revalidar el token y limpiar el estado por completo
         localStorage.removeItem('cuentame_chat_draft');
+        sessionStorage.removeItem('cuentame_initial_greeting_sent');
+        if (copilotConversationId) {
+            sessionStorage.removeItem('cuentame_greeted_' + copilotConversationId);
+        }
         window.location.reload();
     });
 
@@ -1001,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Si el WebSocket se cayó o está cerrado, intentar reconectar
         if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
             if (copilotStreamUrl) {
-                connectWebSocket(copilotStreamUrl);
+                connectWebSocket(copilotStreamUrl, true);
             }
         }
         
@@ -1158,7 +1167,9 @@ document.addEventListener('DOMContentLoaded', () => {
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    function connectWebSocket(streamUrl) {
+    const seenActivityIds = new Set();
+
+    function connectWebSocket(streamUrl, isReconnect = false) {
         if (!streamUrl) return;
 
         if (ws) {
@@ -1175,7 +1186,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Connected to Copilot Studio via secure proxy');
             wsReconnectAttempts = 0;
             updateConnectionStatus('online', 'En línea');
-            triggerCopilotGreeting();
+            if (!isReconnect && !hasAlreadyGreeted()) {
+                triggerCopilotGreeting();
+            }
             flushPendingQueue();
         };
 
@@ -1219,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         wsReconnectTimeout = setTimeout(() => {
             if (copilotStreamUrl) {
-                connectWebSocket(copilotStreamUrl);
+                connectWebSocket(copilotStreamUrl, true);
             }
         }, delay);
     }
@@ -1230,9 +1243,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateConnectionStatus('reconnecting', 'Reconectando...');
         wsReconnectAttempts = 0;
         if (copilotStreamUrl) {
-            connectWebSocket(copilotStreamUrl);
+            connectWebSocket(copilotStreamUrl, true);
         }
-        flushPendingQueue();
     });
 
     window.addEventListener('offline', () => {
@@ -1246,6 +1258,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function processActivity(activity) {
         if (activity.from && activity.from.role === 'user') return;
         
+        // Deduplicar actividades por ID para evitar que reconexiones del WebSocket dupliquen burbujas
+        if (activity.id) {
+            if (seenActivityIds.has(activity.id)) {
+                console.log('[DirectLine] Actividad ya procesada previamente, ignorando duplicado:', activity.id);
+                return;
+            }
+            seenActivityIds.add(activity.id);
+        }
+
         if (activity.type === 'message') {
             // Cancelar timeout activo porque el agente ya respondió exitosamente
             if (activeMessageTimeout) {
@@ -1270,9 +1291,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let hasGreeted = false;
+
+    function hasAlreadyGreeted() {
+        if (hasGreeted) return true;
+        if (sessionStorage.getItem('cuentame_initial_greeting_sent') === 'true') {
+            hasGreeted = true;
+            return true;
+        }
+        if (copilotConversationId && sessionStorage.getItem('cuentame_greeted_' + copilotConversationId) === 'true') {
+            hasGreeted = true;
+            return true;
+        }
+        // Si ya existen mensajes del usuario o del asistente en el chatBox, no se debe enviar saludo
+        const existingMessages = chatBox ? chatBox.querySelectorAll('.message-wrapper:not(.typing-container)') : [];
+        if (existingMessages.length > 0 || pendingQueue.length > 0) {
+            hasGreeted = true;
+            return true;
+        }
+        return false;
+    }
+
     async function triggerCopilotGreeting() {
-        if (!copilotConversationId || hasGreeted) return;
+        if (!copilotConversationId || hasAlreadyGreeted()) {
+            console.log('[Greeting] Saludo inicial omitido porque ya fue emitido previamente.');
+            return;
+        }
+
         hasGreeted = true;
+        sessionStorage.setItem('cuentame_initial_greeting_sent', 'true');
+        if (copilotConversationId) {
+            sessionStorage.setItem('cuentame_greeted_' + copilotConversationId, 'true');
+        }
+
         const activitiesUrl = `${copilotUrl}/${copilotConversationId}/activities`;
         try {
             await fetch(activitiesUrl, {
@@ -1287,6 +1337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     from: { id: 'user1', role: 'user' }
                 })
             });
+            console.log('[Greeting] Saludo inicial enviado con éxito al agente.');
         } catch (err) {
             console.error("Error triggering greeting:", err);
         }
