@@ -47,11 +47,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentProjectId = null;
 
     // Connection & Timeout State
-    const RESPONSE_TIMEOUT_MS = 30000; // 30 segundos de espera máxima para respuesta del agente
+    const RESPONSE_TIMEOUT_MS = 75000; // 75 segundos para permitir orquestación multi-agente y razonamiento profundo
     let activeMessageTimeout = null;
     let lastPendingMessage = null; // { text, files, wrapper }
     let wsReconnectTimeout = null;
     let wsReconnectAttempts = 0;
+    let heartbeatInterval = null;
+    let progressiveStatusTimer = null;
+    let pendingQueue = []; // Cola de envíos pendientes cuando no hay conexión
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
     function updateConnectionStatus(status, text) {
         if (chatStatus && text) {
@@ -65,6 +75,71 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (status === 'reconnecting') {
                 indicatorEl.classList.add('reconnecting');
             }
+        }
+    }
+
+    function restoreDraft() {
+        const savedDraft = localStorage.getItem('cuentame_chat_draft');
+        if (savedDraft && messageInput) {
+            messageInput.value = savedDraft;
+            messageInput.style.height = 'auto';
+            messageInput.style.height = (messageInput.scrollHeight) + 'px';
+            updateSendButtonState();
+        }
+    }
+
+    function startHeartbeat() {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                if (navigator.onLine && copilotStreamUrl) {
+                    console.log('[Heartbeat] WebSocket inactivo detectado. Reconectando...');
+                    connectWebSocket(copilotStreamUrl);
+                }
+            } else if (ws.readyState === WebSocket.OPEN) {
+                if (navigator.onLine && chatStatus && chatStatus.innerText !== "En línea") {
+                    updateConnectionStatus('online', 'En línea');
+                }
+            }
+        }, 25000);
+    }
+
+    function enqueuePendingItem(item) {
+        pendingQueue.push(item);
+        if (item.wrapper) {
+            item.wrapper.classList.add('is-queued');
+            let badge = item.wrapper.querySelector('.message-queued-badge');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'message-queued-badge';
+                badge.innerHTML = '<span class="material-symbols-rounded">schedule</span> <span>En cola (esperando conexión...)</span>';
+                item.wrapper.appendChild(badge);
+            }
+        }
+        scrollToBottom();
+    }
+
+    async function flushPendingQueue() {
+        if (pendingQueue.length === 0 || !navigator.onLine) return;
+        console.log(`[Cola de Envíos] Procesando ${pendingQueue.length} elemento(s) pendiente(s)...`);
+        
+        const itemsToProcess = [...pendingQueue];
+        pendingQueue = [];
+
+        for (const item of itemsToProcess) {
+            if (item.wrapper) {
+                item.wrapper.classList.remove('is-queued');
+                const badge = item.wrapper.querySelector('.message-queued-badge');
+                if (badge) badge.remove();
+            }
+
+            if (item.type === 'chat') {
+                handleUserMessage(item.text, item.files, item.wrapper);
+            } else if (item.type === 'audio') {
+                processAudio(item.audioBlob, item.wrapper);
+            }
+            
+            await new Promise(r => setTimeout(r, 600));
         }
     }
 
@@ -215,8 +290,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         userFormModal.classList.remove('active');
         connectWebSocket(copilotStreamUrl);
+        startHeartbeat();
+        restoreDraft();
     });
-
 
     // Call init
     initializeApp();
@@ -224,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Reset Events
     resetBtn.addEventListener('click', () => {
         // En lugar de limpiar, recargamos la página para revalidar el token y limpiar el estado por completo
+        localStorage.removeItem('cuentame_chat_draft');
         window.location.reload();
     });
 
@@ -286,6 +363,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Auto-resize
         messageInput.style.height = 'auto';
         messageInput.style.height = (messageInput.scrollHeight) + 'px';
+        
+        // Guardar borrador en localStorage
+        const draftText = messageInput.value;
+        if (draftText && draftText.trim().length > 0) {
+            localStorage.setItem('cuentame_chat_draft', draftText);
+        } else {
+            localStorage.removeItem('cuentame_chat_draft');
+        }
     });
 
     // File Attachment Events
@@ -315,9 +400,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function getAdaptiveCompressionSettings() {
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (!conn) {
+            return { maxWidth: 800, maxHeight: 800, quality: 0.7 };
+        }
+        
+        const effectiveType = conn.effectiveType;
+        const saveData = conn.saveData;
+        
+        if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
+            console.log('[Compresión Adaptativa] Red lenta (2G/Ahorro). Comprimiendo a 500px, calidad 0.4');
+            return { maxWidth: 500, maxHeight: 500, quality: 0.4 };
+        } else if (effectiveType === '3g') {
+            console.log('[Compresión Adaptativa] Red 3G. Comprimiendo a 700px, calidad 0.55');
+            return { maxWidth: 700, maxHeight: 700, quality: 0.55 };
+        } else {
+            return { maxWidth: 1000, maxHeight: 1000, quality: 0.75 };
+        }
+    }
+
     async function processFile(file) {
         if (file.type && file.type.startsWith('image/')) {
             return new Promise((resolve) => {
+                const settings = getAdaptiveCompressionSettings();
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = new Image();
@@ -325,8 +431,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const canvas = document.createElement('canvas');
                         let width = img.width;
                         let height = img.height;
-                        const MAX_WIDTH = 800;
-                        const MAX_HEIGHT = 800;
+                        const MAX_WIDTH = settings.maxWidth;
+                        const MAX_HEIGHT = settings.maxHeight;
                         if (width > height) {
                             if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
                         } else {
@@ -339,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         canvas.toBlob((blob) => {
                             const compressedBlob = blob || file;
-                            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                            const dataUrl = canvas.toDataURL('image/jpeg', settings.quality);
                             resolve({
                                 id: 'att_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
                                 file: compressedBlob,
@@ -348,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 isImage: true,
                                 previewUrl: dataUrl
                             });
-                        }, 'image/jpeg', 0.7);
+                        }, 'image/jpeg', settings.quality);
                     };
                     img.onerror = () => {
                         resolve({
@@ -640,17 +746,86 @@ document.addEventListener('DOMContentLoaded', () => {
         recordingTimer.textContent = `${mins}:${secs}`;
     }
 
-    async function processAudio(audioBlob) {
-        addSystemMessage("Transcribiendo audio...");
-        
+    async function processAudio(audioBlob, existingWrapper = null) {
+        if (!audioBlob) return;
+
+        let wrapper = existingWrapper;
+
+        if (!wrapper) {
+            // Crear burbuja de mensaje de voz en el chat del usuario
+            wrapper = document.createElement('div');
+            wrapper.className = 'message-wrapper user-message';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = `
+                <div class="audio-msg-container">
+                    <span class="audio-voice-badge">
+                        <span class="material-symbols-rounded">mic</span>
+                        <span>Mensaje de voz</span>
+                    </span>
+                    <span class="audio-transcribing-status">
+                        <span class="material-symbols-rounded">sync</span>
+                        <span class="status-msg">Transcribiendo audio...</span>
+                    </span>
+                </div>
+            `;
+
+            const time = document.createElement('span');
+            time.className = 'message-time';
+            time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            wrapper.appendChild(bubble);
+            wrapper.appendChild(time);
+            chatBox.appendChild(wrapper);
+            scrollToBottom();
+        } else {
+            wrapper.classList.remove('has-error');
+            const oldRetry = wrapper.querySelector('.message-retry-container');
+            if (oldRetry) oldRetry.remove();
+
+            const bubble = wrapper.querySelector('.message-bubble');
+            if (bubble) {
+                bubble.innerHTML = `
+                    <div class="audio-msg-container">
+                        <span class="audio-voice-badge">
+                            <span class="material-symbols-rounded">mic</span>
+                            <span>Mensaje de voz</span>
+                        </span>
+                        <span class="audio-transcribing-status">
+                            <span class="material-symbols-rounded">sync</span>
+                            <span class="status-msg">Transcribiendo audio...</span>
+                        </span>
+                    </div>
+                `;
+            }
+        }
+
+        // Si el usuario está offline, guardar en la cola de envíos pendientes
+        if (!navigator.onLine) {
+            const statusMsg = wrapper.querySelector('.status-msg');
+            if (statusMsg) statusMsg.textContent = "Esperando conexión...";
+            enqueuePendingItem({ type: 'audio', audioBlob, wrapper });
+            return;
+        }
+
+        // Timeout controlado para la llamada de transcripción (35s)
+        const abortController = new AbortController();
+        const transcribeTimeout = setTimeout(() => {
+            abortController.abort();
+        }, 35000);
+
         try {
             const formData = new FormData();
             formData.append('file', audioBlob, 'audio.webm');
 
             const response = await fetch('/api/chat/transcribe', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: abortController.signal
             });
+
+            clearTimeout(transcribeTimeout);
 
             if (!response.ok) {
                 const text = await response.text();
@@ -659,26 +834,78 @@ document.addEventListener('DOMContentLoaded', () => {
                     const errorData = JSON.parse(text);
                     errorMsg = errorData.error || errorMsg;
                 } catch (e) {
-                    errorMsg = `Cloudflare Error (${response.status}): ${text.substring(0, 100)}`;
+                    errorMsg = `Error (${response.status}): ${text.substring(0, 100)}`;
                 }
                 throw new Error(errorMsg);
             }
 
             const data = await response.json();
-            chatBox.lastElementChild.remove();
             
-            if (data.text) {
-                handleUserMessage(data.text);
+            if (data.text && data.text.trim()) {
+                const bubble = wrapper.querySelector('.message-bubble');
+                if (bubble) {
+                    bubble.innerHTML = `
+                        <div class="audio-voice-badge">
+                            <span class="material-symbols-rounded">mic</span>
+                            <span>Mensaje de voz</span>
+                        </div>
+                        <div class="transcribed-text">${escapeHtml(data.text)}</div>
+                    `;
+                }
+                // Enviar la transcripción a Copilot reutilizando el wrapper existente
+                handleUserMessage(data.text, [], wrapper);
+            } else {
+                throw new Error("No se detectó voz o audio inteligible");
             }
 
         } catch (error) {
+            clearTimeout(transcribeTimeout);
             console.error('Transcription error:', error);
-            chatBox.lastElementChild.remove();
-            addSystemMessage("Error al transcribir el audio.");
+            const isTimeout = error.name === 'AbortError';
+            const reason = isTimeout ? 'Tiempo de espera de transcripción agotado' : 'Error al transcribir el audio';
+            markAudioTranscriptionFailed(wrapper, audioBlob, reason);
         }
     }
 
-    // Message Handling
+    function markAudioTranscriptionFailed(wrapper, audioBlob, reason = "Error al transcribir el audio") {
+        if (!wrapper) return;
+        wrapper.classList.add('has-error');
+
+        const transcribingStatus = wrapper.querySelector('.audio-transcribing-status');
+        if (transcribingStatus) {
+            transcribingStatus.innerHTML = `
+                <span class="material-symbols-rounded" style="color:var(--danger-color,#ef4444); animation:none;">mic_off</span>
+                <span style="color:#fca5a5;">Grabación guardada (sin transcribir)</span>
+            `;
+        }
+
+        let retryContainer = wrapper.querySelector('.message-retry-container');
+        if (!retryContainer) {
+            retryContainer = document.createElement('div');
+            retryContainer.className = 'message-retry-container';
+            wrapper.appendChild(retryContainer);
+        }
+
+        retryContainer.innerHTML = `
+            <span class="message-retry-text">
+                <span class="material-symbols-rounded">error</span>
+                <span>${reason}</span>
+            </span>
+            <button type="button" class="retry-btn" title="Volver a intentar transcribir este audio">
+                <span class="material-symbols-rounded">refresh</span>
+                <span>Reintentar transcripción</span>
+            </button>
+        `;
+
+        const retryBtn = retryContainer.querySelector('.retry-btn');
+        retryBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            processAudio(audioBlob, wrapper);
+        });
+
+        scrollToBottom();
+    }
+
     // Message Handling
     function handleUserMessage(text, customFiles = null, existingWrapper = null) {
         const filesToSend = customFiles !== null ? customFiles : [...attachedFiles];
@@ -690,6 +917,7 @@ document.addEventListener('DOMContentLoaded', () => {
             messageInput.value = '';
             messageInput.style.height = 'auto';
             clearAttachments();
+            localStorage.removeItem('cuentame_chat_draft');
         } else {
             wrapper.classList.remove('has-error');
             const oldRetry = wrapper.querySelector('.message-retry-container');
@@ -698,13 +926,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         sendBtn.disabled = true;
 
+        // Si no hay conexión de red, encolar el mensaje para cuando regrese la conexión
+        if (!navigator.onLine) {
+            enqueuePendingItem({ type: 'chat', text, files: filesToSend, wrapper });
+            return;
+        }
+
         // Limpiar timeout previo si lo hubiera
         if (activeMessageTimeout) {
             clearTimeout(activeMessageTimeout);
             activeMessageTimeout = null;
         }
 
-        // Armar el timeout de respuesta del agente (30 segundos)
+        // Armar el timeout de respuesta del agente (75 segundos)
         lastPendingMessage = { text, files: filesToSend, wrapper };
         activeMessageTimeout = setTimeout(() => {
             onMessageResponseTimeout();
@@ -848,6 +1082,41 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
 
+    function startProgressiveStatus() {
+        stopProgressiveStatus();
+        const stages = [
+            { time: 0, text: "Pensando..." },
+            { time: 8000, text: "Analizando información..." },
+            { time: 22000, text: "Coordinando agentes y contexto..." },
+            { time: 42000, text: "Razonando y redactando respuesta detallada..." }
+        ];
+        const startTime = Date.now();
+
+        const updateStatus = () => {
+            const elapsed = Date.now() - startTime;
+            let currentText = stages[0].text;
+            for (let i = stages.length - 1; i >= 0; i--) {
+                if (elapsed >= stages[i].time) {
+                    currentText = stages[i].text;
+                    break;
+                }
+            }
+            const statusEl = document.querySelector('#typingIndicator .typing-status-text');
+            if (statusEl && statusEl.textContent !== currentText) {
+                statusEl.textContent = currentText;
+            }
+        };
+
+        progressiveStatusTimer = setInterval(updateStatus, 2500);
+    }
+
+    function stopProgressiveStatus() {
+        if (progressiveStatusTimer) {
+            clearInterval(progressiveStatusTimer);
+            progressiveStatusTimer = null;
+        }
+    }
+
     function showTypingIndicator() {
         if (document.getElementById('typingIndicator')) return; 
 
@@ -858,18 +1127,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const bubble = document.createElement('div');
         bubble.className = 'typing-indicator';
         
+        const dotsContainer = document.createElement('div');
+        dotsContainer.className = 'typing-dots';
         for (let i = 0; i < 3; i++) {
             const dot = document.createElement('div');
             dot.className = 'typing-dot';
-            bubble.appendChild(dot);
+            dotsContainer.appendChild(dot);
         }
+        bubble.appendChild(dotsContainer);
+
+        const statusText = document.createElement('span');
+        statusText.className = 'typing-status-text';
+        statusText.textContent = 'Pensando...';
+        bubble.appendChild(statusText);
 
         wrapper.appendChild(bubble);
         chatBox.appendChild(wrapper);
         scrollToBottom();
+
+        startProgressiveStatus();
     }
 
     function removeTypingIndicator() {
+        stopProgressiveStatus();
         const indicators = document.querySelectorAll('#typingIndicator, .typing-container');
         indicators.forEach(ind => ind.remove());
     }
@@ -896,6 +1176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             wsReconnectAttempts = 0;
             updateConnectionStatus('online', 'En línea');
             triggerCopilotGreeting();
+            flushPendingQueue();
         };
 
         ws.onmessage = (event) => {
@@ -951,6 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (copilotStreamUrl) {
             connectWebSocket(copilotStreamUrl);
         }
+        flushPendingQueue();
     });
 
     window.addEventListener('offline', () => {

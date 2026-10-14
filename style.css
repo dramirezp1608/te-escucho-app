@@ -322,16 +322,91 @@ body {
     font-size: 14px;
 }
 
-/* Typing Indicator */
+/* Queued Message Styles */
+.message-queued-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #facc15;
+    font-size: 0.75rem;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.message-queued-badge .material-symbols-rounded {
+    font-size: 14px;
+}
+
+.user-message.is-queued .message-bubble {
+    opacity: 0.85;
+    border: 1px dashed rgba(250, 204, 21, 0.6);
+}
+
+/* Audio Message Styles */
+.audio-msg-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.audio-voice-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.75);
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.audio-transcribing-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--accent-color, #38bdf8);
+}
+
+.audio-transcribing-status .material-symbols-rounded {
+    font-size: 18px;
+    animation: pulseMic 1.5s infinite;
+}
+
+.transcribed-text {
+    line-height: 1.5;
+}
+
+/* Typing Indicator with Progressive Status */
 .typing-indicator {
     display: flex;
-    gap: 4px;
-    padding: 16px 20px;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
     background: var(--ai-msg-bg);
     border-radius: 18px;
     border-top-left-radius: 4px;
     width: fit-content;
+    max-width: 90%;
     border: 1px solid var(--glass-border);
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.typing-status-text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .typing-dot {
