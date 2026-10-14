@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatApp = document.getElementById('chatApp');
     const chatStatus = document.getElementById('chatStatus');
     
+    const downloadBtn = document.getElementById('downloadBtn');
     const resetBtn = document.getElementById('resetBtn');
     const chatBox = document.getElementById('chatBox');
     const chatForm = document.getElementById('chatForm');
@@ -312,6 +313,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         window.location.reload();
     });
+
+    // Export / Download Conversation Events
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', downloadConversation);
+    }
+
+    function downloadConversation() {
+        const messageWrappers = chatBox.querySelectorAll('.message-wrapper:not(.typing-container)');
+        
+        if (!messageWrappers || messageWrappers.length === 0) {
+            alert("Aún no hay mensajes en la conversación para descargar.");
+            return;
+        }
+
+        const headerTitleEl = document.querySelector('.header-info h1');
+        const projectDisplay = headerTitleEl ? headerTitleEl.innerText.replace('Cuentame AI - ', '').trim() : (currentProjectId || 'Proyecto');
+        const dateObj = new Date();
+        const formattedDate = dateObj.toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' });
+        const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        let content = `================================================================================\n`;
+        content += `                  CUENTAME AI - RESPALDO DE CONVERSACIÓN\n`;
+        content += `================================================================================\n`;
+        content += `Proyecto:           ${projectDisplay}\n`;
+        if (currentProjectId) content += `ID de Proyecto:     ${currentProjectId}\n`;
+        if (userName) content += `Usuario:            ${userName}\n`;
+        if (userArea) content += `Área:               ${userArea}\n`;
+        content += `Fecha de descarga:  ${formattedDate} ${formattedTime}\n`;
+        content += `Total de mensajes:  ${messageWrappers.length}\n`;
+        content += `================================================================================\n\n`;
+
+        messageWrappers.forEach((wrapper) => {
+            const isUser = wrapper.classList.contains('user-message');
+            const senderName = isUser ? (userName || 'USUARIO') : 'CUENTAME AI';
+            const timeEl = wrapper.querySelector('.message-time');
+            const time = timeEl ? timeEl.textContent.trim() : '';
+
+            const bubble = wrapper.querySelector('.message-bubble');
+            if (!bubble) return;
+
+            // Revisar si fue un mensaje de voz transcribido
+            const transcribedEl = bubble.querySelector('.transcribed-text');
+            
+            // Revisar adjuntos
+            const attachmentBadges = bubble.querySelectorAll('.message-file-badge, .message-image');
+            const attachmentsList = [];
+            attachmentBadges.forEach(att => {
+                const name = att.querySelector('.file-name')?.textContent || att.alt || 'Archivo adjunto';
+                attachmentsList.push(name);
+            });
+
+            let text = '';
+            if (transcribedEl) {
+                text = `[Mensaje de voz]:\n${transcribedEl.innerText.trim()}`;
+            } else {
+                // Clonar la burbuja para extraer el texto limpio sin controles de retry o estados
+                const clone = bubble.cloneNode(true);
+                const retryEl = clone.querySelector('.message-retry-container');
+                if (retryEl) retryEl.remove();
+                const queuedEl = clone.querySelector('.message-queued-badge');
+                if (queuedEl) queuedEl.remove();
+                const attachContainer = clone.querySelector('.message-attachments');
+                if (attachContainer) attachContainer.remove();
+
+                text = clone.innerText.trim();
+            }
+
+            if (attachmentsList.length > 0) {
+                const attachStr = attachmentsList.map(a => `[Adjunto: ${a}]`).join('\n');
+                text = text ? `${text}\n${attachStr}` : attachStr;
+            }
+
+            if (!text) return;
+
+            content += `--------------------------------------------------------------------------------\n`;
+            content += `[${time}] ${senderName.toUpperCase()}:\n`;
+            content += `${text}\n\n`;
+        });
+
+        content += `================================================================================\n`;
+        content += `                            FIN DEL RESPALDO\n`;
+        content += `================================================================================\n`;
+
+        // Generar y forzar descarga del archivo .txt
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        
+        const safeName = (projectDisplay || 'conversacion').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ_-]/g, '_');
+        const fileDate = dateObj.toISOString().slice(0, 10);
+        link.href = downloadUrl;
+        link.download = `Respaldo_CuentameAI_${safeName}_${fileDate}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    }
 
     // Helper to format filenames with middle-substring and extension preservation
     function formatFileName(name, maxLength = 18) {

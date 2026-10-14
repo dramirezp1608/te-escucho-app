@@ -172,6 +172,12 @@ body {
     color: var(--text-secondary);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .icon-btn {
     background: transparent;
     border: none;
