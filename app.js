@@ -46,6 +46,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let copilotStreamUrl = '';
     let currentProjectId = null;
 
+    // Connection & Timeout State
+    const RESPONSE_TIMEOUT_MS = 30000; // 30 segundos de espera máxima para respuesta del agente
+    let activeMessageTimeout = null;
+    let lastPendingMessage = null; // { text, files, wrapper }
+    let wsReconnectTimeout = null;
+    let wsReconnectAttempts = 0;
+
+    function updateConnectionStatus(status, text) {
+        if (chatStatus && text) {
+            chatStatus.innerText = text;
+        }
+        const indicatorEl = document.querySelector('.status-indicator');
+        if (indicatorEl) {
+            indicatorEl.classList.remove('offline', 'reconnecting');
+            if (status === 'offline') {
+                indicatorEl.classList.add('offline');
+            } else if (status === 'reconnecting') {
+                indicatorEl.classList.add('reconnecting');
+            }
+        }
+    }
+
     let backendInitPromise = null;
 
     // Initialization & Validation
@@ -158,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Mostrar UI principal
         if (authScreen) authScreen.style.display = 'none';
         if (chatApp) chatApp.style.display = 'flex';
-        if (chatStatus) chatStatus.innerText = "En línea";
+        updateConnectionStatus('online', 'En línea');
 
         // Configurar CSS dinámico
         if (data.colors) {
@@ -657,19 +679,99 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Message Handling
-    function handleUserMessage(text) {
-        if (!text && attachedFiles.length === 0) return;
+    // Message Handling
+    function handleUserMessage(text, customFiles = null, existingWrapper = null) {
+        const filesToSend = customFiles !== null ? customFiles : [...attachedFiles];
+        if (!text && filesToSend.length === 0) return;
         
-        const filesToSend = [...attachedFiles];
+        let wrapper = existingWrapper;
+        if (!wrapper) {
+            wrapper = addMessage(text, 'user', filesToSend);
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            clearAttachments();
+        } else {
+            wrapper.classList.remove('has-error');
+            const oldRetry = wrapper.querySelector('.message-retry-container');
+            if (oldRetry) oldRetry.remove();
+        }
         
-        addMessage(text, 'user', filesToSend);
-        
-        messageInput.value = '';
-        messageInput.style.height = 'auto';
-        clearAttachments();
         sendBtn.disabled = true;
+
+        // Limpiar timeout previo si lo hubiera
+        if (activeMessageTimeout) {
+            clearTimeout(activeMessageTimeout);
+            activeMessageTimeout = null;
+        }
+
+        // Armar el timeout de respuesta del agente (30 segundos)
+        lastPendingMessage = { text, files: filesToSend, wrapper };
+        activeMessageTimeout = setTimeout(() => {
+            onMessageResponseTimeout();
+        }, RESPONSE_TIMEOUT_MS);
         
-        sendToCopilot(text, filesToSend);
+        sendToCopilot(text, filesToSend, wrapper);
+    }
+
+    function onMessageResponseTimeout(reason = "Sin respuesta del agente (tiempo de espera agotado)") {
+        removeTypingIndicator();
+        if (lastPendingMessage && lastPendingMessage.wrapper) {
+            markMessageAsFailed(
+                lastPendingMessage.wrapper, 
+                lastPendingMessage.text, 
+                lastPendingMessage.files, 
+                reason
+            );
+        }
+        lastPendingMessage = null;
+        if (activeMessageTimeout) {
+            clearTimeout(activeMessageTimeout);
+            activeMessageTimeout = null;
+        }
+    }
+
+    function markMessageAsFailed(wrapper, text, files, reason = "No se pudo recibir respuesta") {
+        removeTypingIndicator();
+        if (!wrapper) return;
+        
+        wrapper.classList.add('has-error');
+        
+        let retryContainer = wrapper.querySelector('.message-retry-container');
+        if (!retryContainer) {
+            retryContainer = document.createElement('div');
+            retryContainer.className = 'message-retry-container';
+            wrapper.appendChild(retryContainer);
+        }
+        
+        retryContainer.innerHTML = `
+            <span class="message-retry-text">
+                <span class="material-symbols-rounded">error</span>
+                <span>${reason}</span>
+            </span>
+            <button type="button" class="retry-btn" title="Volver a intentar enviar este mensaje">
+                <span class="material-symbols-rounded">refresh</span>
+                <span>Reintentar</span>
+            </button>
+        `;
+        
+        const retryBtn = retryContainer.querySelector('.retry-btn');
+        retryBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            retryMessage(wrapper, text, files);
+        });
+        
+        scrollToBottom();
+    }
+
+    function retryMessage(wrapper, text, files) {
+        // Si el WebSocket se cayó o está cerrado, intentar reconectar
+        if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+            if (copilotStreamUrl) {
+                connectWebSocket(copilotStreamUrl);
+            }
+        }
+        
+        handleUserMessage(text, files, wrapper);
     }
 
     function addMessage(text, sender, attachments = []) {
@@ -727,6 +829,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         chatBox.appendChild(wrapper);
         scrollToBottom();
+        return wrapper;
     }
 
     function addSystemMessage(text) {
@@ -776,10 +879,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function connectWebSocket(streamUrl) {
+        if (!streamUrl) return;
+
+        if (ws) {
+            try {
+                ws.onclose = null;
+                ws.close();
+            } catch (e) {}
+        }
+
+        updateConnectionStatus('reconnecting', 'Conectando...');
         ws = new WebSocket(streamUrl);
         
         ws.onopen = () => {
             console.log('Connected to Copilot Studio via secure proxy');
+            wsReconnectAttempts = 0;
+            updateConnectionStatus('online', 'En línea');
             triggerCopilotGreeting();
         };
 
@@ -798,13 +913,65 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        ws.onerror = (error) => console.error('WebSocket Error:', error);
+        ws.onclose = (event) => {
+            console.warn('WebSocket cerrado:', event.code, event.reason);
+            updateConnectionStatus('reconnecting', 'Reconectando...');
+            scheduleWsReconnect();
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket Error:', error);
+            updateConnectionStatus('reconnecting', 'Reconectando...');
+        };
     }
+
+    function scheduleWsReconnect() {
+        if (wsReconnectTimeout) clearTimeout(wsReconnectTimeout);
+        if (!navigator.onLine) {
+            updateConnectionStatus('offline', 'Sin conexión');
+            return;
+        }
+
+        wsReconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(1.5, wsReconnectAttempts), 10000);
+        console.log(`Reintentando conexión WebSocket en ${Math.round(delay)}ms...`);
+        
+        wsReconnectTimeout = setTimeout(() => {
+            if (copilotStreamUrl) {
+                connectWebSocket(copilotStreamUrl);
+            }
+        }, delay);
+    }
+
+    // Escuchadores de eventos de red global
+    window.addEventListener('online', () => {
+        console.log('Dispositivo recuperó la conexión a internet');
+        updateConnectionStatus('reconnecting', 'Reconectando...');
+        wsReconnectAttempts = 0;
+        if (copilotStreamUrl) {
+            connectWebSocket(copilotStreamUrl);
+        }
+    });
+
+    window.addEventListener('offline', () => {
+        console.warn('Dispositivo perdió la conexión a internet');
+        updateConnectionStatus('offline', 'Sin conexión');
+        if (activeMessageTimeout) {
+            onMessageResponseTimeout("Sin conexión a internet");
+        }
+    });
 
     function processActivity(activity) {
         if (activity.from && activity.from.role === 'user') return;
         
         if (activity.type === 'message') {
+            // Cancelar timeout activo porque el agente ya respondió exitosamente
+            if (activeMessageTimeout) {
+                clearTimeout(activeMessageTimeout);
+                activeMessageTimeout = null;
+            }
+            lastPendingMessage = null;
+
             removeTypingIndicator();
             if (activity.text) addMessage(activity.text, 'ai');
             
@@ -878,9 +1045,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function sendToCopilot(text, files = []) {
+    async function sendToCopilot(text, files = [], wrapper = null) {
         if (!copilotConversationId) {
             addSystemMessage("La conexión con el agente aún no está lista.");
+            if (wrapper) {
+                markMessageAsFailed(wrapper, text, files, "Sin conexión con el agente");
+            }
             return;
         }
 
@@ -932,11 +1102,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            if (!response.ok) throw new Error('Failed to send message');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
         } catch (error) {
             console.error('Copilot send error:', error);
             removeTypingIndicator();
-            addSystemMessage("Error al enviar mensaje al agente.");
+            if (activeMessageTimeout) {
+                clearTimeout(activeMessageTimeout);
+                activeMessageTimeout = null;
+            }
+            if (wrapper) {
+                markMessageAsFailed(wrapper, text, files, "Error de red al enviar");
+            } else {
+                addSystemMessage("Error de red al enviar mensaje al agente.");
+            }
         }
     }
 });
